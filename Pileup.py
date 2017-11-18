@@ -431,16 +431,16 @@ class PileUpGenerator:
         startTime = datetime.now()
         pileup = Pileup(self.sam,self.fasta,chromosome,queryStart,flankLength,outputFilename,label,variantLengths,windowCutoff=windowCutoff,forceCoverage=forceCoverage,coverageCutoff=coverageCutoff,mapQualityCutoff=mapQualityCutoff,sortColumns=sortColumns)
 
-        print(pileup.refSequence)
+        # print(pileup.refSequence)
 
-        print(datetime.now() - startTime, "initialized")
+        # print(datetime.now() - startTime, "initialized")
         pileup.iterateReads()
-        print(datetime.now() - startTime, "drafted")
+        # print(datetime.now() - startTime, "drafted")
         pileup.generatePileupImage()
-        print(datetime.now() - startTime, "finalized")
+        # print(datetime.now() - startTime, "finalized")
         pileup.savePileupRGB(outputFilename)
-        print(datetime.now() - startTime, "encoded and saved")
-        print()
+        # print(datetime.now() - startTime, "encoded and saved")
+        # print()
 
         label = pileup.getOutputLabel()
         rows = pileup.decodeRGB(outputFilename + ".png")
