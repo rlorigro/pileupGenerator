@@ -21,6 +21,8 @@ cutoff = 350
 
 
 def getClassForGenotype(gtField):
+    if gtField[0] == '.':
+        return 1
     if gtField[0] == gtField[-1]:
         if gtField[0] == '0':
             return 1    # homozygous reference
@@ -38,7 +40,6 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
     vcf_in = VariantFile(vcfFile)
     for rec in vcf_in.fetch(region="chr"+vcf_region+subregion):
         gtField = getGTField(rec)   # genotype according to the vcf
-
         genotypeClass = getClassForGenotype(gtField)
 
         if genotypeClass != 0 and rec.qual is not None and rec.qual > qualityCutoff:
@@ -101,7 +102,7 @@ def generatePileupBasedonVCF(vcf_region, bamFile, refFile, vcfFile, output_dir, 
     smry = open(output_dir + 'summary' + '-' + vcf_region + ".csv", 'w')
 
     for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region+subregion):
-        if rec.qual is not None and rec.qual > qualityCutoff and getClassForGenotype(getGTField(rec)) != '0':
+        if rec.qual is not None and rec.qual > qualityCutoff and getClassForGenotype(getGTField(rec)) != 1:
             start = rec.pos - window_size - 1
             end = rec.pos + window_size
             labelString,insertLengths,deleteLengths = getLabel(start, end)
