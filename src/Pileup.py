@@ -323,7 +323,7 @@ class Pileup:
         # iterate through pileupColumns
         offset = 0
 
-        print(self.deleteLengths)
+        # print(self.deleteLengths)
 
         for entry in sorted(self.pileupColumns.items()):
             # print(entry)
@@ -354,9 +354,9 @@ class Pileup:
 
                 for c in range(1,length+1):
                     # print("del label",label)
-                    print(self.label)
+                    # print(self.label)
                     self.label = self.label[:columnIndex+c+offset] + label + self.label[columnIndex+c+offset+1:]
-                    print(self.label)
+                    # print(self.label)
             # c += 1
 
 
@@ -475,12 +475,12 @@ class PileUpGenerator:
         chromosome = str(chromosome)
 
 
-        print(outputFilename)
+        # print(outputFilename)
         startTime = datetime.now()
         pileup = Pileup(self.sam,self.fasta,chromosome,queryStart,flankLength,outputFilename,label,insertLengths=insertLengths,deleteLengths=deleteLengths,windowCutoff=windowCutoff,coverageCutoff=coverageCutoff,mapQualityCutoff=mapQualityCutoff)
 
         # print(label)
-        print(pileup.refSequence)
+        # print(pileup.refSequence)
 
 
         # print(datetime.now() - startTime, "initialized")
@@ -493,12 +493,12 @@ class PileUpGenerator:
         # print()
 
         # print(label)
-        label = pileup.getOutputLabel()
-        print(label)
-
-        rows = pileup.decodeRGB(outputFilename + ".png")
-        for r,row in enumerate(rows):
-            print(label[r],row)
+        # label = pileup.getOutputLabel()
+        # print(label)
+        #
+        # rows = pileup.decodeRGB(outputFilename + ".png")
+        # for r,row in enumerate(rows):
+        #     print(label[r],row)
 
         '''samfile = self.sam
         for pileupcolumn in samfile.pileup("chr3", 77131, 77132):
