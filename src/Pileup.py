@@ -333,6 +333,20 @@ class Pileup:
 
             self.encodeColumn(columnIndex,cigarSegments)
 
+            if columnIndex in self.deleteLengths:
+                label = self.label[columnIndex+offset]
+                # label = '9'
+                length = self.deleteLengths[columnIndex]
+
+                # print("deletes: ", columnIndex, self.deleteLengths)
+
+                for c in range(1,length+1):
+                    # print("del label",label)
+                    # print(self.label)
+                    self.label = self.label[:columnIndex+c+offset] + label + self.label[columnIndex+c+offset+1:]
+                    # print(self.label)
+
+
             # if key is in insertColumns
             if absolutePosition in self.insertColumns:
                 n = len(self.insertColumns[absolutePosition])
@@ -345,23 +359,11 @@ class Pileup:
                     # self.outputRefSequence = self.outputRefSequence[:c] + 'I' + self.outputRefSequence[c:]
 
             # print(columnIndex)
-            if columnIndex in self.deleteLengths:
-                label = self.label[columnIndex+offset]
-                # label = '9'
-                length = self.deleteLengths[columnIndex]
-
-                # print("delete length",length)
-
-                for c in range(1,length+1):
-                    # print("del label",label)
-                    # print(self.label)
-                    self.label = self.label[:columnIndex+c+offset] + label + self.label[columnIndex+c+offset+1:]
-                    # print(self.label)
             # c += 1
 
 
     def labelInsertRegion(self,c,offset,n):
-        # print(c,self.variantLengths)
+        # print("inserts: ",c,self.insertLengths)
 
         if c in self.insertLengths:  # if the position is a variant site
             l = self.insertLengths[c]  # length of insert
@@ -492,13 +494,13 @@ class PileUpGenerator:
         # print(datetime.now() - startTime, "encoded and saved")
         # print()
 
-        # print(label)
+        # ----- UNCOMMENT FOR TEXT DECODING OF IMAGES ------
         # label = pileup.getOutputLabel()
-        # print(label)
         #
         # rows = pileup.decodeRGB(outputFilename + ".png")
         # for r,row in enumerate(rows):
         #     print(label[r],row)
+        # --------------------------------------------------
 
         '''samfile = self.sam
         for pileupcolumn in samfile.pileup("chr3", 77131, 77132):
