@@ -15,7 +15,7 @@ bits. It creates a large binary sparse matrix too.
 """
 
 allVariantRecord = {}
-subregion = ':77131-200000'
+subregion = ':77131-84061'
 # subregion = ''
 cutoffOutput = False
 cutoff = 350
@@ -41,8 +41,8 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
     vcf_in = VariantFile(vcfFile)
     for rec in vcf_in.fetch(region="chr"+vcf_region+subregion):
         gtField = getGTField(rec)   # genotype according to the vcf
-        # print(rec.pos)
-        # print("gtField",gtField)
+        print(rec.pos)
+        print("gtField",gtField)
 
         genotypeClass = getClassForGenotype(gtField)
 
@@ -52,30 +52,45 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
             insertLength = None
             deleteLength = None
 
-            longestAllele = 0
             altAlleles = [alleles[int(gt)] for gt in gtField if gt!='0']
 
-            for allele in altAlleles:      # find length of longest alt allele that was called as a variant
-                # print(alleles)
+            altAllelesByLength = sorted(altAlleles, key=lambda x: len(x), reverse=True)
 
-                length = len(allele)
+            longestLength = len(altAllelesByLength[0])
+            shortestLength = len(altAllelesByLength[-1])
+            refLength = len(rec.ref)
 
-                if length > longestAllele:
-                    longestAllele = length
+            if '0' not in gtField:                                      # double alternate
+                if genotypeClass == 2:                                  # heterozygous, must consider both alt lengths
+                    if longestLength == shortestLength:
+                        if longestLength > refLength:                   # insert
+                            insertLength = longestLength - refLength
+                        elif longestLength < refLength:
+                            deleteLength = refLength - longestLength    # delete
+                    else:
+                        if longestLength > refLength:                   # insert
+                            insertLength = longestLength - refLength
+                        elif longestLength < refLength:
+                            deleteLength = refLength - longestLength    # delete
 
-            if longestAllele > len(rec.ref):
-                insertLength = longestAllele - len(rec.ref)
-            else:
-                # print("alt alleles: ",altAlleles)
-                # print("longest length: ",longestAllele)
-                # print("ref: ",rec.ref)
-                # print("rec length: ",len(rec.ref))
-                #
-                # print("HERE")
+                        if shortestLength > refLength:                  # also insert
+                            insertLength = shortestLength - refLength
+                        elif shortestLength < refLength:                # also delete
+                            deleteLength = refLength - shortestLength
 
-                deleteLength = len(rec.ref) - longestAllele
 
-            # for i in range(rec.start, rec.stop):
+                else:                                                   # homozygous, only one alt
+                    if longestLength > refLength:                       # insert
+                        insertLength = longestLength - refLength
+                    else:
+                        deleteLength = refLength - longestLength
+
+            else:                       # single alt, check length of longest allele to determine if ins or del
+                if longestLength > refLength:
+                    insertLength = longestLength - refLength
+                elif longestLength < refLength:
+                    deleteLength = refLength - longestLength
+
             allVariantRecord[rec.start] = (genotypeClass,insertLength,deleteLength)
 
 
