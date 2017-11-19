@@ -52,24 +52,25 @@ class Pileup:
         self.noneChar = '_'       # character to use for empty positions in the pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
 
-        self.SNPtoRGB = {'M': [255,255,255],
-                         'A': [255,0,  0],
-                         'C': [255,255,0],
-                         'G': [0,  255,0],
-                         'T': [0,  0,  255],
-                         'I': [255,0,  255],
-                         'D': [0,  255,255],
-                         'N': [0,  0,  0],  # redundant in case of read containing 'N'... should this be independent?
-               self.noneChar: [0,  0,  0],}
+        self.SNPtoRGB = {'M': [255, 255, 255],
+                         'A': [255, 0,   0],
+                         'C': [255, 255, 0],
+                         'G': [0,   255, 0],
+                         'T': [0,   0,   255],
+                         'I': [255, 0,   255],
+                         'D': [0,   255, 255],
+                         'N': [0,   0,   0],  # redundant in case of read containing 'N'... should this be independent?
+               self.noneChar: [0,   0,   0],
+                         }
 
-        self.sortingKey = {'M':5,
-                           'A':0,
-                           'C':1,
-                           'G':2,
-                           'T':3,
-                           'I':6,
-                           'D':4,
-                           'N':7}
+        self.sortingKey = {'M': 5,
+                           'A': 0,
+                           'C': 1,
+                           'G': 2,
+                           'T': 3,
+                           'I': 6,
+                           'D': 4,
+                           'N': 7}
 
         self.RGBtoSNP = [[['N', 'T'], ['G', 'D']], [['A', 'I'], ['C', 'M']]]
 
@@ -105,22 +106,23 @@ class Pileup:
 
         for k in range(n):
             if k >= len(self.insertColumns[i]):     # list is empty
-                self.insertColumns[i].append({'A':list(),
-                                              'C':list(),
-                                              'G':list(),
-                                              'T':list()})
+                self.insertColumns[i].append({'A': list(),
+                                              'C': list(),
+                                              'G': list(),
+                                              'T': list(),
+                                              'N': list()})
 
             self.insertColumns[i][k][readCharacters[k]].append(tuple(self.SNPtoRGB[readCharacters[k]]+[qualities[k]]))
 
 
     def initializePileupColumn(self,i):
-        self.pileupColumns[i] = {'M':list(),
-                                 'D':list(),
-                                 'A':list(),
-                                 'C':list(),
-                                 'G':list(),
-                                 'T':list(),
-                                 'N':list()}
+        self.pileupColumns[i] = {'M': list(),
+                                 'D': list(),
+                                 'A': list(),
+                                 'C': list(),
+                                 'G': list(),
+                                 'T': list(),
+                                 'N': list()}
 
 
     def getPileupEncoding(self,cigarCode, refCharacter, readCharacter):
@@ -460,8 +462,8 @@ class PileUpGenerator:
     '''
 
     def __init__(self,alignmentFile,referenceFile):
-        self.sam = pysam.AlignmentFile(alignmentFile,"rb")
-        self.fasta = Fasta(referenceFile,as_raw=True,sequence_always_upper=True)
+        self.sam = pysam.AlignmentFile(alignmentFile, "rb")
+        self.fasta = Fasta(referenceFile, as_raw=True, sequence_always_upper=True)
 
 
     def generatePileup(self,chromosome,position,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff,):
@@ -498,7 +500,7 @@ class PileUpGenerator:
         # label = pileup.getOutputLabel()
         #
         # rows = pileup.decodeRGB(outputFilename + ".png")
-        # for r,row in enumerate(rows):
+        # for r, row in enumerate(rows):
         #     print(label[r],row)
         # --------------------------------------------------
 

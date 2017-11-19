@@ -125,13 +125,14 @@ def getLabel(start, end):
     return labelStr,insertLengths,deleteLengths
 
 
-def generatePileupBasedonVCF(vcf_region, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff, coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff):
+def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff,
+                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff):
     files = list()
     cnt = 0
     start_timer = timer()
     populateRecordDictionary(vcf_region, vcfFile)
-    smry = open(output_dir + "summary" + '-' + vcf_region + ".csv", 'w')
-    log = open(output_dir + "log.txt",'w')
+    smry = open(output_dir + "summary" + '-' + vcf_region + vcf_subregion + ".csv", 'w')
+    log = open(output_dir + "log-" + vcf_region + vcf_subregion + ".txt", 'w')
     files.append(smry)
     files.append(log)
 
@@ -139,10 +140,11 @@ def generatePileupBasedonVCF(vcf_region, bamFile, refFile, vcfFile, output_dir, 
     log.write("BAM file: \t%s\n" % bamFile)
     log.write("VCF file: \t%s\n" % vcfFile)
     log.write("Region: \t%s\n" % vcf_region)
+    log.write("VCF Subregion: \t%s\n" % vcf_subregion)
     log.write("Window size: \t%s\n" % window_size)
     log.write("VCF quality cutoff: \t%s\n" % vcf_quality_cutoff)
 
-    for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region+subregion):
+    for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region+vcf_subregion):
         if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
             start = rec.pos - window_size - 1
             end = rec.pos + window_size
@@ -175,6 +177,40 @@ def generatePileupBasedonVCF(vcf_region, bamFile, refFile, vcfFile, output_dir, 
 
     for file in files:
         file.close()
+
+
+def chunkIt(seq, num):
+    avg = len(seq) / float(num)
+    out = []
+    last = 0.0
+
+    while last < len(seq):
+        out.append(seq[int(last):int(last + avg)])
+        last += avg
+
+    return out
+
+
+def parallel_pileup_generator(vcf_region, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff,
+                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, threads):
+    all_positions = []
+    for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region):
+        if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
+            all_positions.append(rec.pos)
+
+    all_positions = chunkIt(all_positions, threads)
+    starts = [all_positions[i][0] for i in range(len(all_positions))]
+    ends = [all_positions[i][-1] for i in range(len(all_positions))]
+    args = ()
+
+
+    for i in range(len(starts)):
+        args = args + ((starts[i], ends[i]),)
+        vcf_subregion = "-"+str(starts[i])+"-"+str(ends[i])
+        p = Process(target=generatePileupBasedonVCF, args=(vcf_region, vcf_subregion, bamFile, refFile, vcfFile,
+                                                           output_dir, window_size, window_cutoff, coverage_cutoff,
+                                                           map_quality_cutoff, vcf_quality_cutoff,))
+        p.start()
 
 
 if __name__ == '__main__':
@@ -255,10 +291,16 @@ if __name__ == '__main__':
         default=60,
         help="Phred scaled threshold for variant call quality."
     )
+    parser.add_argument(
+        "--max_thread",
+        type=int,
+        default=10,
+        help="Number of maximum threads for this region."
+    )
 
 
     FLAGS, unparsed = parser.parse_known_args()
-    generatePileupBasedonVCF(FLAGS.vcf_region,
+    parallel_pileup_generator(FLAGS.vcf_region,
                              FLAGS.bam,
                              FLAGS.ref,
                              FLAGS.vcf,
@@ -267,7 +309,8 @@ if __name__ == '__main__':
                              FLAGS.window_cutoff,
                              FLAGS.coverage_cutoff,
                              FLAGS.map_quality_cutoff,
-                             FLAGS.vcf_quality_cutoff)
+                             FLAGS.vcf_quality_cutoff,
+                             FLAGS.max_thread)
 
 
 # example usage:
