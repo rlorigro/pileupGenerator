@@ -15,7 +15,7 @@ bits. It creates a large binary sparse matrix too.
 """
 
 allVariantRecord = {}
-subregion = ':77131-84061'
+subregion = ''
 # subregion = ''
 cutoffOutput = False
 cutoff = 350
@@ -41,8 +41,8 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
     vcf_in = VariantFile(vcfFile)
     for rec in vcf_in.fetch(region="chr"+vcf_region+subregion):
         gtField = getGTField(rec)   # genotype according to the vcf
-        print(rec.pos)
-        print("gtField",gtField)
+        # print(rec.pos)
+        # print("gtField",gtField)
 
         genotypeClass = getClassForGenotype(gtField)
 
