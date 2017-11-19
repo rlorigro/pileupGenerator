@@ -18,37 +18,36 @@ class Pileup:
     position, using the pysam and pyfaidx object provided by PileupGenerator
     '''
 
-    def __init__(self,sam,fasta,chromosome,queryStart,flankLength,outputFilename,label,variantLengths,coverageCutoff,mapQualityCutoff,windowCutoff,sortColumns,subsampleRate=0,forceCoverage=False,arrayInitializationFactor=2):
+    def __init__(self,sam,fasta,chromosome,queryStart,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff):
         self.length = flankLength*2+1
         self.label = label
-        self.variantLengths = variantLengths
-        self.subsampleRate = subsampleRate
+        # self.outputLabel = label
+        self.insertLengths = insertLengths
+        self.deleteLengths = deleteLengths
         self.coverageCutoff = coverageCutoff
         self.outputFilename = outputFilename
         self.queryStart = queryStart
-        self.queryEnd = queryStart + self.length
+        self.queryEnd = queryStart + self.length -1
         self.chromosome = chromosome
         self.mapQualityCutoff = mapQualityCutoff
         self.windowCutoff = windowCutoff
-        self.sortColumns = sortColumns
 
         # pysam uses 0-based coordinates
         self.localReads = sam.fetch("chr"+self.chromosome, start=self.queryStart, end=self.queryEnd)
 
         # pyfaidx uses 1-based coordinates
-        self.coverage = sam.count("chr"+self.chromosome, start=self.queryStart, end=self.queryEnd)
-        self.singleCoverage = sam.count("chr"+self.chromosome, start=self.queryStart+flankLength, end=self.queryStart+flankLength+1)
-        self.refSequence = fasta.get_seq(name="chr"+self.chromosome, start=self.queryStart+1, end=self.queryEnd+1)
+        self.refSequence = fasta.get_seq(name="chr"+self.chromosome, start=self.queryStart, end=self.queryEnd)
+        self.outputRefSequence = copy.deepcopy(self.refSequence)
         self.referenceRGB = list()
 
         # stored during cigar string parsing to save time
         self.inserts = defaultdict(list)
 
-        self.deltaRef  = [1,0,1,1,0,0,0,0,0,0,0]    # key for whether reference advances
+        self.deltaRef  = [1,0,1,0,0,0,0,0,0,0,0]    # key for whether reference advances
         self.deltaRead = [1,1,0,0,0,0,0,0,0,0,0]    # key for whether read sequence advances
                                                     #  ['M','I','D','N','S','H','P','=','X','B','NM']
 
-        self.deltaRefRelative  = [1,0,1,0,0,0,0,0,0,0,0]    # key for whether reference advances (for match comparison within query region)
+        # self.deltaRefRelative  = [1,0,1,0,0,0,0,0,0,0,0]    # key for whether reference advances (for match comparison within query region)
 
         self.noneChar = '_'       # character to use for empty positions in the pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
@@ -109,8 +108,7 @@ class Pileup:
                 self.insertColumns[i].append({'A':list(),
                                               'C':list(),
                                               'G':list(),
-                                              'T':list(),
-                                              'N':list()})
+                                              'T':list()})
 
             self.insertColumns[i][k][readCharacters[k]].append(tuple(self.SNPtoRGB[readCharacters[k]]+[qualities[k]]))
 
@@ -162,6 +160,12 @@ class Pileup:
             self.parseRead(pileupIteratorIndex, read)
             pileupIteratorIndex += 1
 
+        # for column in self.pileupColumns:
+        #     print(column)
+        #     for cigar in self.pileupColumns[column]:
+        #         print(cigar,len(self.pileupColumns[column][cigar]))
+        # for column in self.insertColumns:
+        #     print(column)
 
     def calculateQuality(self,baseQuality,mapQuality):
         quality = min(baseQuality,mapQuality)  # calculate minimum of P_no_error for base and read quality
@@ -179,8 +183,12 @@ class Pileup:
         :param read:
         :return:
         '''
+        # print("--------######-----STARTING A READ--------######-----")
+        # print("READ: ", read.query_alignment_sequence)
+        # print("CIGAR: ", read.cigartuples)
 
         refPositions = read.get_reference_positions()
+
         readQualities = read.query_qualities
         mapQuality = read.mapping_quality
 
@@ -188,56 +196,73 @@ class Pileup:
             # sys.stderr.write("WARNING: read contains no reference alignments: %s\n" % read.query_name)
             pass
         else:
-            self.refStart = refPositions[0]
-            self.refEnd = refPositions[-1]
+            self.refStart = refPositions[0] + 1
             self.cigarTuples = read.cigartuples
+
 
             refPositions = None  # dump
 
             self.readSequence = read.query_alignment_sequence
+            # self.readSequence = self.readSequence[1:]
+            # print(self.readSequence)
+            # print("query start: ",self.queryStart," | read start: ",self.refStart," | read end: ",self.refEnd)
 
             self.refPosition = 0
-            self.readPosition = -1
+            self.readPosition = 0
             self.relativeIndexRef = 0
 
-            if self.refStart > self.queryStart:                         # if the read starts during the query region
-                self.relativeIndexRef += self.refStart-self.queryStart -1  # add the difference to ref index
+            if self.refStart >= self.queryStart:                         # if the read starts during the query region
+                self.relativeIndexRef = self.refStart-self.queryStart    # add the difference to ref index
+
+                # print("HERE",self.readSequence[self.readPosition],self.refSequence[self.relativeIndexRef])
 
             for c, entry in enumerate(self.cigarTuples):
                 snp = entry[0]
                 n = entry[1]
                 #print(self.readPosition)
-                #print(snp, n)
+                # print("SNP: ", snp, "N: ", n)
+                # print("Ref position", self.refPosition, "Read position", self.readPosition)
 
                 self.absolutePosition = self.refPosition+self.refStart
-                #print(self.absolutePosition)
+                # print(self.absolutePosition)
                 if self.absolutePosition < self.queryStart-n:       # skip by blocks if not in query region yet
+                    # print("NOT IN THE WINDOW YET :-(")
                     self.refPosition += self.deltaRef[snp]*n
                     self.readPosition += self.deltaRead[snp]*n
 
-                elif self.absolutePosition >= self.queryStart-n:    # read one position at a time for query region
-                    #print(self.absolutePosition, self.refPosition, self.refSequence[self.refPosition], snp, n)
+                elif self.absolutePosition >= self.queryStart-n and self.absolutePosition < self.queryEnd:    # read one position at a time for query region
+                    # print("NEARLY IN THE WINDOW :-D ")
+                    # print("abs pos: ",self.absolutePosition, "ref position: ", self.refPosition, "read position: ", self.readPosition)
+                    # print(self.refSequence[self.refPosition],"n",n)
+                    # print(self.readSequence[self.readPosition])
+                    # exit()
+
                     if snp == 1:    # insert
                         if self.absolutePosition > self.queryStart:
-                            readCharacters = self.readSequence[self.readPosition+1:self.readPosition+n+1]
-                            baseQualities = readQualities[self.readPosition+1:self.readPosition+n+1]
+                            readCharacters = self.readSequence[self.readPosition:self.readPosition+n]
+                            baseQualities = readQualities[self.readPosition:self.readPosition+n]
 
                             qualities = [self.calculateQuality(baseQuality, mapQuality) for baseQuality in baseQualities]
 
-                            self.addInsertEntry(self.absolutePosition, readCharacters, n, qualities)
+                            self.addInsertEntry(self.absolutePosition-1, readCharacters, n, qualities)
 
-                        self.refPosition += self.deltaRef[snp]*n
+                        # self.refPosition += self.deltaRef[snp]*n
                         self.readPosition += self.deltaRead[snp]*n
-                    else:
+
+                    elif snp < 4:
+                        # print("Alright, looking good")
                         # print(self.queryStart, self.refSequence)
                         # print(self.readSequence)
                         # print(self.readPosition, n, len(self.readSequence), self.readPosition+n)
                         for i in range(n):
                             #print(self.absolutePosition, self.refPosition, self.refSequence[self.refPosition], self.readSequence[self.readPosition])# this should be switched to slicing for speed
-                            if self.absolutePosition >= self.queryStart and self.absolutePosition < self.queryEnd:
+                            # print("iterator", i, "readPosition", self.readPosition, "refPosition", self.refPosition)
+
+                            if self.absolutePosition >= self.queryStart and self.absolutePosition <= self.queryEnd:
+                                # print("GOT IN")
                                 # print(self.absolutePosition, self.queryEnd)
                                 # print(self.readPosition, len(self.readSequence))
-                                # print(self.refStart-self.queryStart, self.absolutePosition, self.relativeIndexRef, self.refSequence[self.relativeIndexRef], self.readSequence[self.readPosition])
+                                # print(self.readPosition,read.query_name,self.refStart-self.queryStart, self.absolutePosition, self.relativeIndexRef, self.refSequence[self.relativeIndexRef], self.readSequence[self.readPosition])
                                 readCharacter = self.readSequence[self.readPosition]
                                 refCharacter = self.refSequence[self.relativeIndexRef]
                                 cigarCode = self.cigarLegend[snp]
@@ -249,18 +274,19 @@ class Pileup:
 
                                 self.addPileupEntry(self.absolutePosition, pileupEncoding, quality)
 
-                                self.relativeIndexRef += self.deltaRefRelative[snp]
+                                self.relativeIndexRef += self.deltaRef[snp]
 
-                                self.absolutePosition = self.refPosition+self.refStart
+                                # self.absolutePosition = self.refPosition+self.refStart
                                 self.refPosition += self.deltaRef[snp]
                                 self.readPosition += self.deltaRead[snp]
-                                if snp == 4:
-                                    break
                             else:
-                                self.absolutePosition = self.refPosition+self.refStart
+                                # self.absolutePosition = self.refPosition+self.refStart
                                 self.refPosition += self.deltaRef[snp]
                                 self.readPosition += self.deltaRead[snp]
-                elif self.absolutePosition > self.queryEnd:  # stop iterating after query region
+
+                            self.absolutePosition = self.refPosition+self.refStart
+
+                else:  # stop iterating after query region
                     break
 
 
@@ -270,6 +296,7 @@ class Pileup:
         Take a column-specific dictionary and turn it into a RGBA pixel vector
         '''
 
+        # print(columnIndex,self.refSequence)
         if columnIndex is None:
             ntRef = 'I'
             fillerPixel = tuple(self.SNPtoRGB['I']+[255])
@@ -294,42 +321,62 @@ class Pileup:
 
     def generatePileupImage(self):
         # iterate through pileupColumns
-        c = 0
+        offset = 0
+
+        print(self.deleteLengths)
+
         for entry in sorted(self.pileupColumns.items()):
             # print(entry)
-            absolutePosition = entry[0]                         # chromosome position
+            absolutePosition = entry[0]                           # chromosome position
             cigarSegments = entry[1]                              # dictionary of counts for M,D,A,C,G,T
-            # columnIndex = absolutePosition - self.queryStart    # position in the query window
+            columnIndex = absolutePosition - self.queryStart      # position in the query window
 
-            self.encodeColumn(c, cigarSegments)
+            self.encodeColumn(columnIndex,cigarSegments)
 
             # if key is in insertColumns
             if absolutePosition in self.insertColumns:
                 n = len(self.insertColumns[absolutePosition])
-                self.labelInsertRegion(c+1,n)
+                self.labelInsertRegion(columnIndex,offset,n)
 
                 # print(n,self.insertColumns[absolutePosition])
-                for i,insertFrequencies in enumerate(self.insertColumns[absolutePosition]):     # n insert columns
-                    c += 1
-                    self.encodeColumn(None,insertFrequencies)
-                    self.refSequence = self.refSequence[:c] + 'I' + self.refSequence[c:]
+                for i,entry in enumerate(self.insertColumns[absolutePosition]):     # n insert columns
+                    offset += 1
+                    self.encodeColumn(None,entry)
+                    # self.outputRefSequence = self.outputRefSequence[:c] + 'I' + self.outputRefSequence[c:]
 
-            c += 1
+            # print(columnIndex)
+            if columnIndex in self.deleteLengths:
+                label = self.label[columnIndex+offset]
+                # label = '9'
+                length = self.deleteLengths[columnIndex]
+
+                # print("delete length",length)
+
+                for c in range(1,length+1):
+                    # print("del label",label)
+                    print(self.label)
+                    self.label = self.label[:columnIndex+c+offset] + label + self.label[columnIndex+c+offset+1:]
+                    print(self.label)
+            # c += 1
 
 
-    def labelInsertRegion(self,c,n):
-        # print(n)
-        if c in self.variantLengths:  # if the position is a variant site
-            l = self.variantLengths[c]-1  # -1 for ref
+    def labelInsertRegion(self,c,offset,n):
+        # print(c,self.variantLengths)
+
+        if c in self.insertLengths:  # if the position is a variant site
+            l = self.insertLengths[c]  # length of insert
             if l >= n:  # correctly modify the label to fit the insert
-                labelInsert = self.label[c-1]*n  # using the length of the called variant at pos.
+                labelInsert = self.label[c+offset]*n  # using the length of the called variant at pos.
             else:
-                labelInsert = self.label[c-1]*l+self.noneLabel*(n-l)
+                labelInsert = self.label[c+offset]*l+self.noneLabel*(n-l)
 
         else:
             labelInsert = self.noneLabel*n  # otherwise the insert is labeled with None label
 
-        self.label = self.label[:int(c)]+labelInsert+self.label[int(c):]
+        # print(labelInsert)
+        # print(self.label)
+        # print(self.refSequence)
+        self.label = self.label[:c+offset+1]+labelInsert+self.label[c+offset+1:]
         # print(self.label)
 
 
@@ -415,7 +462,7 @@ class PileUpGenerator:
         self.fasta = Fasta(referenceFile,as_raw=True,sequence_always_upper=True)
 
 
-    def generatePileup(self,chromosome,position,flankLength,outputFilename,label,variantLengths,forceCoverage=False,coverageCutoff=200,mapQualityCutoff=20,windowCutoff=150,sortColumns=False):
+    def generatePileup(self,chromosome,position,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff,):
         '''
         Generate a pileup at a given position
         :param queryStart:
@@ -423,16 +470,18 @@ class PileUpGenerator:
         :return:
         '''
 
-        queryStart = position-flankLength
+        queryStart = position-flankLength +1
 
         chromosome = str(chromosome)
 
 
-        # print(outputFilename)
+        print(outputFilename)
         startTime = datetime.now()
-        pileup = Pileup(self.sam,self.fasta,chromosome,queryStart,flankLength,outputFilename,label,variantLengths,windowCutoff=windowCutoff,forceCoverage=forceCoverage,coverageCutoff=coverageCutoff,mapQualityCutoff=mapQualityCutoff,sortColumns=sortColumns)
+        pileup = Pileup(self.sam,self.fasta,chromosome,queryStart,flankLength,outputFilename,label,insertLengths=insertLengths,deleteLengths=deleteLengths,windowCutoff=windowCutoff,coverageCutoff=coverageCutoff,mapQualityCutoff=mapQualityCutoff)
 
-        # print(pileup.refSequence)
+        # print(label)
+        print(pileup.refSequence)
+
 
         # print(datetime.now() - startTime, "initialized")
         pileup.iterateReads()
@@ -443,10 +492,24 @@ class PileUpGenerator:
         # print(datetime.now() - startTime, "encoded and saved")
         # print()
 
+        # print(label)
         label = pileup.getOutputLabel()
+        print(label)
+
         rows = pileup.decodeRGB(outputFilename + ".png")
-        # for r,row in enumerate(rows):
-        #     print(label[r],row)
+        for r,row in enumerate(rows):
+            print(label[r],row)
+
+        '''samfile = self.sam
+        for pileupcolumn in samfile.pileup("chr3", 77131, 77132):
+            print("\ncoverage at base %s = %s"%
+                  (pileupcolumn.pos, pileupcolumn.n))
+            for pileupread in pileupcolumn.pileups:
+                if not pileupread.is_del and not pileupread.is_refskip:
+                    # query position is None if is_del or is_refskip is set.
+                    print('\tbase in read %s = %s'%
+                          (pileupread.alignment.query_name,
+                           pileupread.alignment.query_sequence[pileupread.query_position]))'''
 
         return pileup.getOutputLabel()
 

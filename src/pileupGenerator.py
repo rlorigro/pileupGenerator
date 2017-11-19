@@ -15,7 +15,8 @@ bits. It creates a large binary sparse matrix too.
 """
 
 allVariantRecord = {}
-subregion = ''
+subregion = ':77131-200000'
+# subregion = ''
 cutoffOutput = False
 cutoff = 350
 
@@ -40,28 +41,42 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
     vcf_in = VariantFile(vcfFile)
     for rec in vcf_in.fetch(region="chr"+vcf_region+subregion):
         gtField = getGTField(rec)   # genotype according to the vcf
+        # print(rec.pos)
+        # print("gtField",gtField)
+
         genotypeClass = getClassForGenotype(gtField)
 
-        if genotypeClass != 0 and rec.qual is not None and rec.qual > qualityCutoff:
+        if genotypeClass != 1 and rec.qual is not None and rec.qual > qualityCutoff:
             alleles = rec.alleles
 
             insertLength = None
             deleteLength = None
 
             longestAllele = 0
-            for gt in gtField:  # find length of longest allele that was called as a variant, that is not a ref
-                length = len(alleles[int(gt)])
+            altAlleles = [alleles[int(gt)] for gt in gtField if gt!='0']
+
+            for allele in altAlleles:      # find length of longest alt allele that was called as a variant
+                # print(alleles)
+
+                length = len(allele)
 
                 if length > longestAllele:
                     longestAllele = length
 
             if longestAllele > len(rec.ref):
-                insertLength = longestAllele
+                insertLength = longestAllele - len(rec.ref)
             else:
-                deleteLength = longestAllele
+                # print("alt alleles: ",altAlleles)
+                # print("longest length: ",longestAllele)
+                # print("ref: ",rec.ref)
+                # print("rec length: ",len(rec.ref))
+                #
+                # print("HERE")
 
-            for i in range(rec.start, rec.stop):
-                allVariantRecord[i] = (genotypeClass,insertLength,deleteLength)
+                deleteLength = len(rec.ref) - longestAllele
+
+            # for i in range(rec.start, rec.stop):
+            allVariantRecord[rec.start] = (genotypeClass,insertLength,deleteLength)
 
 
 def getLabel(start, end):
@@ -76,40 +91,61 @@ def getLabel(start, end):
         if i in allVariantRecord.keys():
             labelStr += str(allVariantRecord[i][0])
 
-            if insertCount == 0:
-                if allVariantRecord[i][1] is not None:
-                    insertLengths[j] = int(allVariantRecord[i][1])
-                    insertCount = allVariantRecord[i][1] - 1
-            else:
-                insertCount -= 1
-
-            if deleteCount == 0:
-                if allVariantRecord[i][2] is not None:
-                    deleteLengths[j] = int(allVariantRecord[i][2])
-                    deleteCount = allVariantRecord[i][2] - 1
-            else:
-                deleteCount -= 1
+            # if insertCount == 0:
+            if allVariantRecord[i][1] is not None:
+                insertLengths[j] = int(allVariantRecord[i][1])
+            #         insertCount = allVariantRecord[i][1] - 1
+            # else:
+            #     insertCount -= 1
+            #
+            # if deleteCount == 0:
+            if allVariantRecord[i][2] is not None:
+                deleteLengths[j] = int(allVariantRecord[i][2])
+            #         deleteCount = allVariantRecord[i][2] - 1
+            # else:
+            #     deleteCount -= 1
 
         else:
             labelStr += str(1)
     return labelStr,insertLengths,deleteLengths
 
 
-def generatePileupBasedonVCF(vcf_region, bamFile, refFile, vcfFile, output_dir, window_size, qualityCutoff=60):
+def generatePileupBasedonVCF(vcf_region, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff, coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff):
+    files = list()
     cnt = 0
     start_timer = timer()
     populateRecordDictionary(vcf_region, vcfFile)
-    smry = open(output_dir + 'summary' + '-' + vcf_region + ".csv", 'w')
+    smry = open(output_dir + "summary" + '-' + vcf_region + ".csv", 'w')
+    log = open(output_dir + "log.txt",'w')
+    files.append(smry)
+    files.append(log)
+
+    log.write("Reference file: \t%s\n" % refFile)
+    log.write("BAM file: \t%s\n" % bamFile)
+    log.write("VCF file: \t%s\n" % vcfFile)
+    log.write("Region: \t%s\n" % vcf_region)
+    log.write("Window size: \t%s\n" % window_size)
+    log.write("VCF quality cutoff: \t%s\n" % vcf_quality_cutoff)
 
     for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region+subregion):
-        if rec.qual is not None and rec.qual > qualityCutoff and getClassForGenotype(getGTField(rec)) != 1:
+        if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
             start = rec.pos - window_size - 1
             end = rec.pos + window_size
             labelString,insertLengths,deleteLengths = getLabel(start, end)
             filename = output_dir + rec.chrom + "-" + str(rec.pos)
 
             p = SamPileupBMP.PileUpGenerator(bamFile, refFile)
-            outputLabelString = p.generatePileup(chromosome=vcf_region, position=rec.pos - 1, flankLength=window_size, outputFilename=filename, label=labelString, variantLengths=insertLengths)
+            outputLabelString = p.generatePileup(chromosome=vcf_region,
+                                                 position=rec.pos - 1,
+                                                 flankLength=window_size,
+                                                 coverageCutoff=coverage_cutoff,
+                                                 windowCutoff=window_cutoff,
+                                                 mapQualityCutoff=map_quality_cutoff,
+                                                 outputFilename=filename,
+                                                 label=labelString,
+                                                 insertLengths=insertLengths,
+                                                 deleteLengths=deleteLengths
+                                                 )
 
             cnt += 1
             if cnt % 1000 == 0:
@@ -121,6 +157,9 @@ def generatePileupBasedonVCF(vcf_region, bamFile, refFile, vcfFile, output_dir, 
             if cutoffOutput:
                 if cnt > cutoff:
                     break
+
+    for file in files:
+        file.close()
 
 
 if __name__ == '__main__':
@@ -175,10 +214,45 @@ if __name__ == '__main__':
         "--window_size",
         type=int,
         default=100,
-        help="Window size of pileup."
+        help="Window size of query region."
     )
+    parser.add_argument(
+        "--window_cutoff",
+        type=int,
+        default=250,
+        help="Size of output image."
+    )
+    parser.add_argument(
+        "--coverage_cutoff",
+        type=int,
+        default=200,
+        help="Size of output image."
+    )
+    parser.add_argument(
+        "--map_quality_cutoff",
+        type=int,
+        default=20,
+        help="Phred scaled threshold for mapping quality."
+    )
+    parser.add_argument(
+        "--vcf_quality_cutoff",
+        type=int,
+        default=60,
+        help="Phred scaled threshold for variant call quality."
+    )
+
+
     FLAGS, unparsed = parser.parse_known_args()
-    generatePileupBasedonVCF(FLAGS.vcf_region, FLAGS.bam, FLAGS.ref, FLAGS.vcf, FLAGS.output_dir, FLAGS.window_size)
+    generatePileupBasedonVCF(FLAGS.vcf_region,
+                             FLAGS.bam,
+                             FLAGS.ref,
+                             FLAGS.vcf,
+                             FLAGS.output_dir,
+                             FLAGS.window_size,
+                             FLAGS.window_cutoff,
+                             FLAGS.coverage_cutoff,
+                             FLAGS.map_quality_cutoff,
+                             FLAGS.vcf_quality_cutoff)
 
 
 # example usage:
