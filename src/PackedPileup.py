@@ -507,16 +507,16 @@ class PileUpGenerator:
         # pileup.generatePileupImage()
         # print(datetime.now() - startTime, "finalized")
         pileup.savePileupRGB(outputFilename)
-        print(datetime.now() - startTime, "encoded and saved")
+        # print(datetime.now() - startTime, "encoded and saved")
         # print()
 
         # ----- UNCOMMENT FOR TEXT DECODING OF IMAGES ------
-        print(outputFilename)
-        label = pileup.getOutputLabel()
-
-        rows = pileup.decodeRGB(outputFilename + ".png")
-        for r,row in enumerate(rows):
-            print(label[r],row)
+        # print(outputFilename)
+        # label = pileup.getOutputLabel()
+        #
+        # rows = pileup.decodeRGB(outputFilename + ".png")
+        # for r,row in enumerate(rows):
+        #     print(label[r],row)
         # --------------------------------------------------
 
         return pileup.getOutputLabel()
