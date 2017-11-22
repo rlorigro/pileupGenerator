@@ -351,6 +351,28 @@ class Pileup:
             self.referenceRGB.append(tuple(encoding))
 
 
+    def labelInsertRegion(self,c,offset,n):
+        '''
+        Label inserts as some combination of None labels and het/hom ref/alt depending on the length of the insert
+        specified by the vcf.
+        :param c:
+        :param offset:
+        :param n:
+        :return:
+        '''
+        if c in self.insertLengths:                         # if the position is a called variant site
+            l = self.insertLengths[c]  # length of insert
+            if l >= n:                                      # correctly modify the label to fit the insert
+                labelInsert = self.label[c+offset]*n        # using the length of the called variant at pos.
+            else:
+                labelInsert = self.label[c+offset]*l+self.noneLabel*(n-l)
+
+        else:
+            labelInsert = self.noneLabel*n                  # otherwise the insert is labeled with None label
+
+        self.label = self.label[:c+offset+1]+labelInsert+self.label[c+offset+1:]
+
+
     def savePileupRGB(self,filename):
         '''
         Save the pileup binary array as a bitmap image using a gray color map
@@ -376,15 +398,26 @@ class Pileup:
         image_iterator = 0
         i = 0
         while image_iterator < self.windowCutoff:
+            if i in self.deleteLengths:                   # update delete labels
+                label = self.label[image_iterator]
+                length = self.deleteLengths[i]
+
+                for c in range(1,length+1):
+                    self.label = self.label[:image_iterator+c] + label + self.label[image_iterator+c+1:]
+
             if i in self.inserts:
                 # print("HERE", i)
                 insert_rows = self.inserts[i]
+                n = len(self.inserts[i])
+                self.labelInsertRegion(i-1,image_iterator-i,n)
 
                 for insert in insert_rows:
                     # print(insert)
                     for j in range(self.coverageCutoff):
                         pixels[j, image_iterator] = tuple(insert[j]) if j < len(insert) else tuple(self.SNPtoRGB[self.noneChar]+[255])
                     image_iterator += 1
+
+
             # print(i, image_iterator)
             for j in range(self.coverageCutoff):
                 if j < self.coverageCutoff:
@@ -474,16 +507,16 @@ class PileUpGenerator:
         # pileup.generatePileupImage()
         # print(datetime.now() - startTime, "finalized")
         pileup.savePileupRGB(outputFilename)
-        # print(datetime.now() - startTime, "encoded and saved")
+        print(datetime.now() - startTime, "encoded and saved")
         # print()
 
         # ----- UNCOMMENT FOR TEXT DECODING OF IMAGES ------
-        # print(outputFilename)
-        # label = pileup.getOutputLabel()
-        #
-        # rows = pileup.decodeRGB(outputFilename + ".png")
-        # for r,row in enumerate(rows):
-        #     print(label[r],row)
+        print(outputFilename)
+        label = pileup.getOutputLabel()
+
+        rows = pileup.decodeRGB(outputFilename + ".png")
+        for r,row in enumerate(rows):
+            print(label[r],row)
         # --------------------------------------------------
 
         return pileup.getOutputLabel()
