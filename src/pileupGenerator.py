@@ -163,7 +163,7 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
             end = rec.pos + window_size
             labelString,insertLengths,deleteLengths = getLabel(start, end)
             filename = output_dir + rec.chrom + "_" + str(rec.pos)
-
+            log.write("%s" % filename)
             outputLabelString = p.generatePileup(chromosome=vcf_region,
                                                  position=rec.pos - 1,
                                                  flankLength=window_size,

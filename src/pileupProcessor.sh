@@ -17,7 +17,8 @@ output_dir=$output_dir'run-'$now
 mkdir $output_dir
 echo $output_dir
 mkdir tmp
-chrs=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT)
+# chrs=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT)
+chrs=(3)
 for i in ${chrs[@]};
     do
     current_output_dir=$output_dir/'chr'$i/
