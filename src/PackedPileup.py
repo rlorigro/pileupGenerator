@@ -385,23 +385,24 @@ class Pileup:
 
         self.pileupImage = [self.referenceRGB] + self.pileupImage
 
-        image = Image.new("RGBA",(self.coverageCutoff, self.windowCutoff))
+        image = Image.new("RGBA", (self.coverageCutoff, self.windowCutoff))
         pixels = image.load()
-
+        # print(len(self.referenceRGB))
         # print(image.size)
         # print(len(self.pileupImage), len(self.pileupImage[0]))
         image_iterator = 0
         i = 0
         while image_iterator < self.windowCutoff:
+            # print(image_iterator)
             if i in self.deleteLengths:                   # update delete labels
                 label = self.label[image_iterator]
                 length = self.deleteLengths[i]
 
-                for c in range(1,length+1):
+                for c in range(1, length+1):
                     self.label = self.label[:image_iterator+c] + label + self.label[image_iterator+c+1:]
 
             if i in self.inserts:
-                # print("HERE", i)
+                # print("HERE", image_iterator, i)
                 insert_rows = self.inserts[i]
                 n = len(self.inserts[i])
                 self.labelInsertRegion(i-1,image_iterator-i,n)
@@ -413,8 +414,13 @@ class Pileup:
 
                     image_iterator += 1
                     self.refAnchors.append(i)
+                    if image_iterator >= self.windowCutoff:
+                        break
 
             # print(i, image_iterator)
+            if image_iterator >= self.windowCutoff:
+                break
+
             for j in range(self.coverageCutoff):
                 if j < self.coverageCutoff:
                     pixels[j, image_iterator] = tuple(self.pileupImage[j][i]) if i < len(self.pileupImage[j]) else tuple(self.SNPtoRGB[self.noneChar]+[255])
@@ -429,22 +435,20 @@ class Pileup:
             image_iterator += 1
             i += 1
 
-        image.save(filename,"PNG")
+        image.save(filename, "PNG")
         imageFilename = self.outputFilename + ".png"
 
-        row = [imageFilename,self.queryStart] + self.refAnchors
+        row = [imageFilename, self.queryStart] + self.refAnchors
         self.smry_ref_pos_file_writer.writerow(row)
 
 
     def RGBtoBinary(self,rgb):
         return [int(value/255) for value in rgb]
 
-
     def RGBtoSortingKey(self,rgb):
         i1,i2,i3 = self.RGBtoBinary(rgb)
         code = self.RGBtoSNP[i1][i2][i3]
         return self.sortingKey[code]
-
 
     def getOutputLabel(self):
         blankLength = self.windowCutoff - len(self.label)
@@ -499,7 +503,7 @@ class PileUpGenerator:
         :return:
         '''
 
-        queryStart = position-flankLength +1
+        queryStart = position-flankLength + 1
 
         chromosome = str(chromosome)
 

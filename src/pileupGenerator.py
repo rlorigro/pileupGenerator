@@ -42,9 +42,6 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
     vcf_in = VariantFile(vcfFile)
     for rec in vcf_in.fetch(region="chr"+vcf_region+subregion):
         gtField = getGTField(rec)   # genotype according to the vcf
-        # print(rec.pos)
-        # print("gtField",gtField)
-
         genotypeClass = getClassForGenotype(gtField)
 
         if genotypeClass != 1 and rec.qual is not None and rec.qual > qualityCutoff:
@@ -79,7 +76,6 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
                         elif shortestLength < refLength:                # also delete
                             deleteLength = refLength - shortestLength
 
-
                 else:                                                   # homozygous, only one alt
                     if longestLength > refLength:                       # insert
                         insertLength = longestLength - refLength
@@ -92,7 +88,7 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
                 elif longestLength < refLength:
                     deleteLength = refLength - longestLength
 
-            allVariantRecord[rec.start] = (genotypeClass,insertLength,deleteLength)
+            allVariantRecord[rec.start] = (genotypeClass, insertLength, deleteLength)
 
 
 def getLabel(start, end):
@@ -123,7 +119,7 @@ def getLabel(start, end):
 
         else:
             labelStr += str(1)
-    return labelStr,insertLengths,deleteLengths
+    return labelStr, insertLengths, deleteLengths
 
 
 def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff,
@@ -161,9 +157,8 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
         if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
             start = rec.pos - window_size - 1
             end = rec.pos + window_size
-            labelString,insertLengths,deleteLengths = getLabel(start, end)
+            labelString, insertLengths, deleteLengths = getLabel(start, end)
             filename = output_dir + rec.chrom + "_" + str(rec.pos)
-            log.write("%s" % filename)
             outputLabelString = p.generatePileup(chromosome=vcf_region,
                                                  position=rec.pos - 1,
                                                  flankLength=window_size,
@@ -175,12 +170,11 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
                                                  insertLengths=insertLengths,
                                                  deleteLengths=deleteLengths
                                                  )
-
             cnt += 1
             if cnt % 1000 == 0:
                 end_timer = timer()
                 print(str(cnt) + " Records done", file=sys.stderr)
-                print("TIME elapsed "+ str(end_timer - start_timer), file=sys.stderr)
+                print("TIME elapsed " + str(end_timer - start_timer), file=sys.stderr)
             smry.write(os.path.abspath(filename) + ".png," + str(outputLabelString)+'\n')
 
             if cutoffOutput:
@@ -214,7 +208,6 @@ def parallel_pileup_generator(vcf_region, bamFile, refFile, vcfFile, output_dir,
     starts = [all_positions[i][0] for i in range(len(all_positions))]
     ends = [all_positions[i][-1] for i in range(len(all_positions))]
     args = ()
-
 
     for i in range(len(starts)):
         args = args + ((starts[i], ends[i]),)
@@ -310,7 +303,6 @@ if __name__ == '__main__':
         help="Number of maximum threads for this region."
     )
 
-
     FLAGS, unparsed = parser.parse_known_args()
     parallel_pileup_generator(FLAGS.vcf_region,
                              FLAGS.bam,
@@ -323,6 +315,17 @@ if __name__ == '__main__':
                              FLAGS.map_quality_cutoff,
                              FLAGS.vcf_quality_cutoff,
                              FLAGS.max_threads)
+    # generatePileupBasedonVCF(FLAGS.vcf_region,
+    #                          subregion,
+    #                          FLAGS.bam,
+    #                          FLAGS.ref,
+    #                          FLAGS.vcf,
+    #                          FLAGS.output_dir,
+    #                          FLAGS.window_size,
+    #                          FLAGS.window_cutoff,
+    #                          FLAGS.coverage_cutoff,
+    #                          FLAGS.map_quality_cutoff,
+    #                          FLAGS.vcf_quality_cutoff)
 
 
 # example usage:
