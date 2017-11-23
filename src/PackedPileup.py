@@ -18,7 +18,7 @@ class Pileup:
     position, using the pysam and pyfaidx object provided by PileupGenerator
     '''
 
-    def __init__(self,sam,fasta,chromosome,queryStart,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff):
+    def __init__(self,sam,fasta,smry_ref_pos_file_writer,chromosome,queryStart,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff):
         self.length = flankLength*2+1
         self.label = label
         self.insertLengths = insertLengths
@@ -30,6 +30,7 @@ class Pileup:
         self.chromosome = chromosome
         self.mapQualityCutoff = mapQualityCutoff
         self.windowCutoff = windowCutoff
+        self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
 
         # pysam fetch reads
         self.localReads = sam.fetch("chr"+self.chromosome, start=self.queryStart, end=self.queryEnd)
@@ -429,15 +430,10 @@ class Pileup:
             i += 1
 
         image.save(filename,"PNG")
-
-        csvFilename = self.outputFilename.split('-')[0] + "-ref_positions.csv"
         imageFilename = self.outputFilename + ".png"
 
         row = [imageFilename,self.queryStart] + self.refAnchors
-
-        with open(csvFilename,'a') as outfile:
-            writer = csv.writer(outfile)
-            writer.writerow(row)
+        self.smry_ref_pos_file_writer.writerow(row)
 
 
     def RGBtoBinary(self,rgb):
@@ -489,9 +485,10 @@ class PileUpGenerator:
     Creates pileups of aligned reads given a SAM/BAM alignment and FASTA reference
     '''
 
-    def __init__(self,alignmentFile,referenceFile):
+    def __init__(self,alignmentFile, referenceFile, smry_ref_pos_file_writer):
         self.sam = pysam.AlignmentFile(alignmentFile,"rb")
         self.fasta = Fasta(referenceFile,as_raw=True,sequence_always_upper=True)
+        self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
 
 
     def generatePileup(self,chromosome,position,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff):
@@ -508,7 +505,7 @@ class PileUpGenerator:
 
 
         startTime = datetime.now()
-        pileup = Pileup(self.sam,self.fasta,chromosome,queryStart,flankLength,outputFilename,label,insertLengths=insertLengths,deleteLengths=deleteLengths,windowCutoff=windowCutoff,coverageCutoff=coverageCutoff,mapQualityCutoff=mapQualityCutoff)
+        pileup = Pileup(self.sam,self.fasta,self.smry_ref_pos_file_writer,chromosome,queryStart,flankLength,outputFilename,label,insertLengths=insertLengths,deleteLengths=deleteLengths,windowCutoff=windowCutoff,coverageCutoff=coverageCutoff,mapQualityCutoff=mapQualityCutoff)
 
 
         # print(datetime.now() - startTime, "initialized")
@@ -521,12 +518,12 @@ class PileUpGenerator:
         # print()
 
         # ----- UNCOMMENT FOR TEXT DECODING OF IMAGES ------
-        # print(outputFilename)
-        # label = pileup.getOutputLabel()
-        #
-        # rows = pileup.decodeRGB(outputFilename + ".png")
-        # for r,row in enumerate(rows):
-        #     print(label[r],row)
+        print(outputFilename)
+        label = pileup.getOutputLabel()
+
+        rows = pileup.decodeRGB(outputFilename + ".png")
+        for r,row in enumerate(rows):
+            print(label[r],row)
         # --------------------------------------------------
 
         return pileup.getOutputLabel()

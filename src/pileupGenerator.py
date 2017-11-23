@@ -6,7 +6,8 @@ import time
 from timeit import default_timer as timer
 import sys
 import os
-import Pileup as SamPileupBMP
+import csv
+import PackedPileup as SamPileupBMP
 """
 This program takes an alignment file (bam) and a reference file
 to create a sparse bitmap representation of the pileup. It uses
@@ -131,10 +132,17 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     cnt = 0
     start_timer = timer()
     populateRecordDictionary(vcf_region, vcfFile)
-    smry = open(output_dir + "summary" + '-' + vcf_region + vcf_subregion + ".csv", 'w')
-    log = open(output_dir + "log-" + vcf_region + vcf_subregion + ".txt", 'w')
+    smry = open(output_dir + "summary" + '_' + vcf_region + vcf_subregion + ".csv", 'w')
+    smry_ref_pos_file = open(output_dir + "ref_positions_" + vcf_region + vcf_subregion + ".csv", 'w')
+    smry_ref_pos_file_writer = csv.writer(smry_ref_pos_file)
+    try:
+        os.stat("tmp/")
+    except:
+        os.mkdir("tmp/")
+    log = open("tmp/" + "log_" + vcf_region + vcf_subregion + ".txt", 'w')
     files.append(smry)
     files.append(log)
+    files.append(smry_ref_pos_file)
 
     log.write("Reference file: \t%s\n" % refFile)
     log.write("BAM file: \t%s\n" % bamFile)
@@ -142,16 +150,20 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     log.write("Region: \t%s\n" % vcf_region)
     log.write("VCF Subregion: \t%s\n" % vcf_subregion)
     log.write("Window size: \t%s\n" % window_size)
+    log.write("Coverage cutoff: \t%s\n" % coverage_cutoff)
     log.write("VCF quality cutoff: \t%s\n" % vcf_quality_cutoff)
+    log.write("Map quality cutoff: \t%s\n" % map_quality_cutoff)
+
+
+    p = SamPileupBMP.PileUpGenerator(bamFile, refFile, smry_ref_pos_file_writer)
 
     for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region+vcf_subregion):
         if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
             start = rec.pos - window_size - 1
             end = rec.pos + window_size
             labelString,insertLengths,deleteLengths = getLabel(start, end)
-            filename = output_dir + rec.chrom + "-" + str(rec.pos)
+            filename = output_dir + rec.chrom + "_" + str(rec.pos)
 
-            p = SamPileupBMP.PileUpGenerator(bamFile, refFile)
             outputLabelString = p.generatePileup(chromosome=vcf_region,
                                                  position=rec.pos - 1,
                                                  flankLength=window_size,
@@ -282,7 +294,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--map_quality_cutoff",
         type=int,
-        default=20,
+        default=5,
         help="Phred scaled threshold for mapping quality."
     )
     parser.add_argument(
@@ -292,7 +304,7 @@ if __name__ == '__main__':
         help="Phred scaled threshold for variant call quality."
     )
     parser.add_argument(
-        "--max_thread",
+        "--max_threads",
         type=int,
         default=10,
         help="Number of maximum threads for this region."
@@ -310,7 +322,7 @@ if __name__ == '__main__':
                              FLAGS.coverage_cutoff,
                              FLAGS.map_quality_cutoff,
                              FLAGS.vcf_quality_cutoff,
-                             FLAGS.max_thread)
+                             FLAGS.max_threads)
 
 
 # example usage:
