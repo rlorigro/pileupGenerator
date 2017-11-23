@@ -518,12 +518,12 @@ class PileUpGenerator:
         # print()
 
         # ----- UNCOMMENT FOR TEXT DECODING OF IMAGES ------
-        print(outputFilename)
-        label = pileup.getOutputLabel()
-
-        rows = pileup.decodeRGB(outputFilename + ".png")
-        for r,row in enumerate(rows):
-            print(label[r],row)
+        # print(outputFilename)
+        # label = pileup.getOutputLabel()
+        #
+        # rows = pileup.decodeRGB(outputFilename + ".png")
+        # for r,row in enumerate(rows):
+        #     print(label[r],row)
         # --------------------------------------------------
 
         return pileup.getOutputLabel()
