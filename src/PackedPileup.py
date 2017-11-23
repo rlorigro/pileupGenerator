@@ -6,7 +6,7 @@ from PIL import Image
 import sys
 import numpy
 import copy
-
+import csv
 """
 This  module takes an alignment file and produces a pileup across all alignments in a query region, and encodes the
 pileup as an image where each x pixel corresponds to base position and y corresponds to coverage depth
@@ -21,7 +21,6 @@ class Pileup:
     def __init__(self,sam,fasta,chromosome,queryStart,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff):
         self.length = flankLength*2+1
         self.label = label
-        # self.outputLabel = label
         self.insertLengths = insertLengths
         self.deleteLengths = deleteLengths
         self.coverageCutoff = coverageCutoff
@@ -32,22 +31,22 @@ class Pileup:
         self.mapQualityCutoff = mapQualityCutoff
         self.windowCutoff = windowCutoff
 
-        # pysam uses 0-based coordinates
+        # pysam fetch reads
         self.localReads = sam.fetch("chr"+self.chromosome, start=self.queryStart, end=self.queryEnd)
 
-        # pyfaidx uses 1-based coordinates
+        # pyfaidx fetch reference sequence for query region
         self.refSequence = fasta.get_seq(name="chr"+self.chromosome, start=self.queryStart, end=self.queryEnd)
         self.outputRefSequence = copy.deepcopy(self.refSequence)
         self.referenceRGB = list()
 
         # stored during cigar string parsing to save time
-        self.inserts = defaultdict(list)
+        # self.inserts = defaultdict(list)
 
         self.deltaRef  = [1,0,1,0,0,0,0,0,0,0,0]    # key for whether reference advances
         self.deltaRead = [1,1,0,0,0,0,0,0,0,0,0]    # key for whether read sequence advances
                                                     #  ['M','I','D','N','S','H','P','=','X','B','NM']
 
-        self.noneChar = '_'       # character to use for empty positions in the pileup
+        self.noneChar = '_'       # character to use for empty positions in the text pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
 
         self.SNPtoRGB = {'M': [255,255,255],
@@ -75,7 +74,7 @@ class Pileup:
 
         # self.pileupColumns = dict()
         self.inserts = dict()
-        self.pileupImage = [[self.SNPtoRGB[self.noneChar]+[255]]*(self.windowCutoff) for j in range(self.coverageCutoff)]
+        self.pileupImage = [[self.SNPtoRGB[self.noneChar]+[255]]*(self.windowCutoff) for j in range(self.coverageCutoff)]  # mixing tuples (below) and lists... bad!
         # print(self.pileupImage)
         self.cigarLegend = ['M', 'I', 'D', 'N', 'S', 'H', 'P', '=', 'X', 'B', '?']  # ?=NM
 
@@ -90,6 +89,7 @@ class Pileup:
         self.relativeIndexRef = None
         self.pileupEnds = dict()
         self.packMap = dict()
+        self.refAnchors = list()
 
 
     def generateReadMapping(self,r,startIndex):
@@ -168,12 +168,6 @@ class Pileup:
             if c >= len(self.inserts[i]):
                 self.inserts[i] = self.inserts[i] + [[self.SNPtoRGB['I']+[255]]*(self.windowCutoff)]
             self.inserts[i][c][self.packMap[r]+1] = tuple(self.SNPtoRGB[character] + [qualities[c]])
-
-        # print(i, self.inserts[i])
-
-
-
-
 
 
     def getPileupEncoding(self,cigarCode, refCharacter, readCharacter):
@@ -296,9 +290,9 @@ class Pileup:
                                         return
 
 
-                                readCharacter = self.readSequence[self.readPosition]
-                                refCharacter = self.refSequence[self.relativeIndexRef]
-                                cigarCode = self.cigarLegend[snp]
+                                # readCharacter = self.readSequence[self.readPosition]
+                                # refCharacter = self.refSequence[self.relativeIndexRef]
+                                # cigarCode = self.cigarLegend[snp]
                                 baseQuality = readQualities[self.readPosition]
 
                                 quality = self.calculateQuality(baseQuality, mapQuality)
@@ -415,8 +409,9 @@ class Pileup:
                     # print(insert)
                     for j in range(self.coverageCutoff):
                         pixels[j, image_iterator] = tuple(insert[j]) if j < len(insert) else tuple(self.SNPtoRGB[self.noneChar]+[255])
-                    image_iterator += 1
 
+                    image_iterator += 1
+                    self.refAnchors.append(i)
 
             # print(i, image_iterator)
             for j in range(self.coverageCutoff):
@@ -424,10 +419,25 @@ class Pileup:
                     pixels[j, image_iterator] = tuple(self.pileupImage[j][i]) if i < len(self.pileupImage[j]) else tuple(self.SNPtoRGB[self.noneChar]+[255])
                 else:
                     pixels[j, image_iterator] = tuple(self.SNPtoRGB[self.noneChar]+[255])
+
+            if i < len(self.refSequence):
+                self.refAnchors.append(i)
+            else:
+                self.refAnchors.append(len(self.refSequence)-1)
+
             image_iterator += 1
             i += 1
 
         image.save(filename,"PNG")
+
+        csvFilename = self.outputFilename.split('-')[0] + "-ref_positions.csv"
+        imageFilename = self.outputFilename + ".png"
+
+        row = [imageFilename,self.queryStart] + self.refAnchors
+
+        with open(csvFilename,'a') as outfile:
+            writer = csv.writer(outfile)
+            writer.writerow(row)
 
 
     def RGBtoBinary(self,rgb):
