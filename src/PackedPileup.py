@@ -452,8 +452,8 @@ class Pileup:
 
     def getOutputLabel(self):
         blankLength = self.windowCutoff - len(self.label)
-
         self.label += self.noneLabel*blankLength
+        self.label = self.label[:self.windowCutoff]
         return self.label
 
 
