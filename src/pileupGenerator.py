@@ -227,7 +227,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--bam",
         type=str,
-        required = True,
+        required=True,
         help="BAM file with alignments."
     )
     parser.add_argument(
@@ -255,12 +255,6 @@ if __name__ == '__main__':
         help="Site region. Ex: chr3"
     )
     parser.add_argument(
-        "--coverage",
-        type=int,
-        default=50,
-        help="Read coverage, default is 50x."
-    )
-    parser.add_argument(
         "--output_dir",
         type=str,
         default="output/",
@@ -275,13 +269,19 @@ if __name__ == '__main__':
     parser.add_argument(
         "--window_cutoff",
         type=int,
-        default=250,
+        default=220,
         help="Size of output image."
+    )
+    parser.add_argument(
+        "--coverage",
+        type=int,
+        default=50,
+        help="Read coverage, default is 50x."
     )
     parser.add_argument(
         "--coverage_cutoff",
         type=int,
-        default=200,
+        default=50,
         help="Size of output image."
     )
     parser.add_argument(
