@@ -118,7 +118,6 @@ class Decoder:
                 decodeIndex = numpy.sum(channels*self.decodeIndex)
                 snp = self.decodeToSNPMap[decodeIndex]
 
-                print(snp)
                 rgb = self.SNPtoRGB[snp]
                 # print(rgb)
                 # print(quality)
