@@ -50,20 +50,20 @@ class Pileup:
         self.noneChar = '_'       # character to use for empty positions in the text pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
 
-        self.SNPtoRGB = {'M': [1,0,0,0,0,0,0,0,0],
-                         'A': [0,1,0,0,0,0,0,0,0],
-                         'C': [0,0,1,0,0,0,0,0,0],
-                         'G': [0,0,0,1,0,0,0,0,0],
-                         'T': [0,0,0,0,1,0,0,0,0],
-                         'I': [0,0,0,0,0,1,0,0,0],
-                         'D': [0,0,0,0,0,0,1,0,0],
-                         'N': [0,0,0,0,0,0,0,1,0],  # redundant in case of read containing 'N'... should this be independent?
-               self.noneChar: [0,0,0,0,0,0,0,0,1],}
+        self.SNPtoRGB = {'M': [1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],
+                         'A': [0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0],
+                         'C': [0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0],
+                         'G': [0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0],
+                         'T': [0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0],
+                         'I': [0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0],
+                         'D': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],
+                         'N': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],  # redundant in case of read containing 'N'... should this be independent?
+               self.noneChar: [0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0],}
 
-        self.decodeMap = ['.', 'A', 'C', 'G', 'T', '-', 'D', 'N', '_']
+        self.decodeMap = ['M', 'A', 'C', 'G', 'T', '-', 'D', '_']
         self.decodeIndex = list(range(len(self.decodeMap)))
 
-        self.noneAlpha = [0]
+        self.noneAlpha = [1]
         self.insertAlpha = [1]
         self.referenceAlpha = [1]
 
@@ -75,10 +75,6 @@ class Pileup:
                            'I':6,
                            'D':4,
                            'N':7}
-
-        # self.RGBtoSNP = [[['N', 'T'], ['G', 'D']], [['A', 'I'], ['C', 'M']]]
-        #
-        # self.RGBtoSNPtext = [[[' ', 'T'], ['G', 'D']], [['A', '_'], ['C', '.']]]
 
         # self.pileupColumns = dict()
         self.inserts = dict()
@@ -115,10 +111,6 @@ class Pileup:
 
             decodeMap[i] = key
 
-
-        #     print(i)
-        #
-        # print(decodeMap)
 
     def generateReadMapping(self,r,startIndex):
         '''
@@ -164,6 +156,7 @@ class Pileup:
                 else:
                     encoding = self.SNPtoRGB['M']
 
+
             elif snp == 2:                                          # delete
                 encoding = self.SNPtoRGB['D']
 
@@ -193,13 +186,14 @@ class Pileup:
             self.inserts[i] = []
 
         for c, character in enumerate(readCharacters):
-            if c >= len(self.inserts[i]):
+            if c >= len(self.inserts[i]):   # no insert column exists yet
                 self.inserts[i] = self.inserts[i] + [[self.SNPtoRGB['I']+self.insertAlpha]*(self.coverageCutoff+1)]
+
 
             # print("inserts",i,len(self.inserts))
             # print("insert column",c,len(self.inserts[i]))
             # print("qual",c,len(qualities))
-            # print("packmap",self.packMap[r]+1)
+            # print("packmap",self.packMap[r]+1,len(self.inserts[i][c]))
             # print("r",r)
             self.inserts[i][c][self.packMap[r]+1] = self.SNPtoRGB[character] + [qualities[c]]
 
@@ -236,7 +230,7 @@ class Pileup:
         '''
         quality = min(baseQuality,mapQuality)       # calculate minimum of quality for base and read quality
         quality = (1-(10 ** ((quality)/-10)))   # convert to probability and scale to 0-255 for pixel encoding
-        quality = int(round(quality))
+        # quality = int(round(quality))
 
         return quality
 
@@ -361,6 +355,23 @@ class Pileup:
             self.referenceRGB.append(encoding)
 
 
+    def cleanInsertColumns(self,i):
+        print(self.inserts.keys())
+        for c in range(len(self.inserts[i])):
+            for r in range(self.coverageCutoff+1):
+                prevEntry = self.pileupImage[r][i-1][:-1]   # exclude quality
+                prevEntry = self.decodeMap[prevEntry.index(1)]
+                insertEntry = self.inserts[i][c][r][:-1]    # exclude quality
+                insertEntry = self.decodeMap[insertEntry.index(1)]
+
+                print(i,r,prevEntry,insertEntry)
+                if prevEntry == self.noneChar and insertEntry != ['I']:  # previous entry decodes to None character
+                    self.inserts[i][c][r] = self.SNPtoRGB[self.noneChar]+self.noneAlpha
+
+            # self.inserts[i].append(insertTemplate)
+            # print(self.inserts[i])
+
+
     def savePileupRGB(self,filename):
         '''
         Save the pileup binary array as a bitmap image using a gray color map
@@ -383,8 +394,7 @@ class Pileup:
         image_iterator = 0
         i = 0
         while image_iterator < self.windowCutoff:
-            # print(image_iterator)
-            if i in self.deleteLengths:                   # update delete labels
+            if i in self.deleteLengths:                     # update delete labels
                 label = self.label[image_iterator]
                 length = self.deleteLengths[i]
 
@@ -392,13 +402,13 @@ class Pileup:
                     self.label = self.label[:image_iterator+c] + label + self.label[image_iterator+c+1:]
 
             if i in self.inserts:
-                # print("HERE", image_iterator, i)
                 insert_rows = self.inserts[i]
                 n = len(self.inserts[i])
-                self.labelInsertRegion(i-1,image_iterator-i,n)
+                self.labelInsertRegion(i-1,image_iterator-i,n)  # update insert labels
+
+                self.cleanInsertColumns(i)
 
                 for insert in insert_rows:
-                    # print(insert)
                     for j in range(self.coverageCutoff):
                         pileupArray[j][image_iterator] = insert[j] if j < len(insert) else self.SNPtoRGB[self.noneChar]+self.noneAlpha
 
@@ -463,18 +473,16 @@ class Pileup:
         text = list()
 
         for w in range(width):
-            row = ''
+            row = list()
             for h in range(height):
                 channels = array[w,h,:-1]
-                index = numpy.sum(channels*self.decodeIndex)
+                index = int(numpy.sum(channels*self.decodeIndex))
 
-                # print(index,self.decodeMap[index])
+                row.append(self.decodeMap[index])
 
-                row += self.decodeMap[index]
-            # print(row)
-            text.append(row)
+            text.append(''.join(row))
 
-        return text
+            return text
 
 
 class PileUpGenerator:
@@ -514,13 +522,13 @@ class PileUpGenerator:
         # print()
 
         # ----- UNCOMMENT FOR TEXT DECODING OF IMAGES ------
-        print(outputFilename)
-        label = pileup.getOutputLabel()
-
-        rows = pileup.decodeRGB(outputFilename + ".npy")
-        print(label)
-        for r,row in enumerate(rows):
-            print(row)
+        # print(outputFilename)
+        # label = pileup.getOutputLabel()
+        #
+        # rows = pileup.decodeRGB(outputFilename + ".npy")
+        # print(label)
+        # for r,row in enumerate(rows):
+        #     print(row)
         # --------------------------------------------------
 
         return pileup.getOutputLabel()
