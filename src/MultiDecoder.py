@@ -7,9 +7,16 @@ class Decoder:
         self.summaryFile = summaryFilename
         self.localPath = localPath
 
-        self.decodeToSNPMap = ['M', 'A', 'C', 'G', 'T', 'I', 'D', 'N', '_']
-        self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', '-', 'D', 'N', '_']
+        # matches
+        # self.decodeToSNPMap = ['M', 'A', 'C', 'G', 'T', 'I', 'D', '_']
+        # self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', '-', 'D', '_']
+        # self.decodeIndex = list(range(len(self.decodeToTextMap)))
+
+        # no matches
+        self.decodeToSNPMap = ['A', 'C', 'G', 'T', 'I', 'D', '_']
+        self.decodeToTextMap = ['A', 'C', 'G', 'T', '-', 'D', '_']
         self.decodeIndex = list(range(len(self.decodeToTextMap)))
+
 
         self.RGBtoText = [[[' ', 'T'], ['G', 'D']], [['A', '_'], ['C', '.']]]
 
@@ -24,15 +31,15 @@ class Decoder:
 
         self.noneChar = '_'
 
-        self.SNPtoRGB = {'M': [255,255,255],
+        self.SNPtoRGB = {#'M': [255,255,255],
                          'A': [255,0,  0],
                          'C': [255,255,0],
                          'G': [0,  255,0],
                          'T': [0,  0,  255],
-                         'I': [0,  0,  0],
+                         'I': [255,255,255],
                          'D': [0,  255,255],
-                         'N': [0,  0,  0],  # redundant in case of read containing 'N'... should this be independent?
-               self.noneChar: [0,  0,  0]}
+                         'N': [0,  255,255],  # redundant in case of read containing 'N'... should this be independent?
+               self.noneChar: [127,127,127]}
 
 
     def decodeArraysToStdout(self):
@@ -115,15 +122,13 @@ class Decoder:
             for h in range(height):
                 channels = array[w,h,:-1]
                 quality = array[w,h,depth-1]     # q is always last channel
-                decodeIndex = numpy.sum(channels*self.decodeIndex)
+                decodeIndex = int(numpy.sum(channels*self.decodeIndex))
                 snp = self.decodeToSNPMap[decodeIndex]
 
                 rgb = self.SNPtoRGB[snp]
-                # print(rgb)
-                # print(quality)
                 rgba = rgb+[quality*255]
-                # print(rgba)
-                rgba = tuple(rgba)
+                # print(quality)
+                rgba = tuple(map(int,rgba))
                 pixels[h,w] = rgba
 
         pngFilePath = npyFilePath.split('.')[0] + ".png"
@@ -141,7 +146,7 @@ class Decoder:
             row = list()
             for h in range(height):
                 channels = array[w,h,:-1]
-                index = numpy.sum(channels*self.decodeIndex)
+                index = int(numpy.sum(channels*self.decodeIndex))
                 row.append(self.decodeToTextMap[index])
 
             text.append(''.join(row))
@@ -177,7 +182,7 @@ class Decoder:
         return text
 
 
-# decoder = Decoder("/Users/saureous/code/Git/pileupGenerator/data/nChannels/summary_3:100000-200000.csv",
-#                   localPath="/Users/saureous/code/Git/pileupGenerator/data/nChannels/")
-#
-# decoder.convertArraysToPNG()
+decoder = Decoder("/Users/saureous/code/Git/pileupGenerator/data/nChannels/summary_3:100000-200000.csv",
+                  localPath="/Users/saureous/code/Git/pileupGenerator/data/nChannels/")
+
+decoder.convertArraysToPNG()
