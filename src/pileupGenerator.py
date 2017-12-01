@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 import sys
 import os
 import csv
-import PackedPileup as SamPileupBMP
+import nChannelPileup as SamPileupBMP
 """
 This program takes an alignment file (bam) and a reference file
 to create a sparse bitmap representation of the pileup. It uses
@@ -38,13 +38,14 @@ def getGTField(rec):
     return str(rec).rstrip().split('\t')[-1].split(':')[0].replace('/', '|').replace('\\', '|').split('|')
 
 
-def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
+def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff):
     vcf_in = VariantFile(vcfFile)
     for rec in vcf_in.fetch(region="chr"+vcf_region+subregion):
         gtField = getGTField(rec)   # genotype according to the vcf
         genotypeClass = getClassForGenotype(gtField)
 
-        if genotypeClass != 1 and rec.qual is not None and rec.qual > qualityCutoff:
+        if genotypeClass != 1 and rec.qual is not None and rec.qual >= qualityCutoff:
+            # print(rec)
             alleles = rec.alleles
 
             insertLength = None
@@ -127,15 +128,16 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     files = list()
     cnt = 0
     start_timer = timer()
-    populateRecordDictionary(vcf_region, vcfFile)
-    smry = open(output_dir + "summary" + '_' + vcf_region + vcf_subregion + ".csv", 'w')
-    smry_ref_pos_file = open(output_dir + "ref_positions_" + vcf_region + vcf_subregion + ".csv", 'w')
+    populateRecordDictionary(vcf_region, vcfFile, vcf_quality_cutoff)
+    # print(output_dir + "summary" + '_' + vcf_region + vcf_subregion + ".csv")
+    smry = open(output_dir + "summary" + '_' + vcf_region + "_" + vcf_subregion[1:] + ".csv", 'w')
+    smry_ref_pos_file = open(output_dir + "ref_positions_" + vcf_region + "_" + vcf_subregion[1:] + ".csv", 'w')
     smry_ref_pos_file_writer = csv.writer(smry_ref_pos_file)
     try:
         os.stat("tmp/")
     except:
         os.mkdir("tmp/")
-    log = open("tmp/" + "log_" + vcf_region + vcf_subregion + ".txt", 'w')
+    log = open("tmp/" + "log_" + vcf_region + "_" + vcf_subregion[1:] + ".txt", 'w')
     files.append(smry)
     files.append(log)
     files.append(smry_ref_pos_file)
@@ -154,7 +156,8 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     p = SamPileupBMP.PileUpGenerator(bamFile, refFile, smry_ref_pos_file_writer)
 
     for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region+vcf_subregion):
-        if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
+        if rec.qual is not None and rec.qual >= vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
+            # print(rec)
             start = rec.pos - window_size - 1
             end = rec.pos + window_size
             labelString, insertLengths, deleteLengths = getLabel(start, end)
@@ -175,7 +178,7 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
                 end_timer = timer()
                 print(str(cnt) + " Records done", file=sys.stderr)
                 print("TIME elapsed " + str(end_timer - start_timer), file=sys.stderr)
-            smry.write(os.path.abspath(filename) + ".png," + str(outputLabelString)+'\n')
+            smry.write(os.path.abspath(filename) + ".npy," + str(outputLabelString)+'\n')
 
             if cutoffOutput:
                 if cnt > cutoff:
@@ -263,13 +266,13 @@ if __name__ == '__main__':
     parser.add_argument(
         "--window_size",
         type=int,
-        default=100,
+        default=25,
         help="Window size of query region."
     )
     parser.add_argument(
         "--window_cutoff",
         type=int,
-        default=220,
+        default=60,
         help="Size of output image."
     )
     parser.add_argument(
@@ -293,7 +296,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--vcf_quality_cutoff",
         type=int,
-        default=60,
+        default=0,
         help="Phred scaled threshold for variant call quality."
     )
     parser.add_argument(
@@ -302,8 +305,10 @@ if __name__ == '__main__':
         default=10,
         help="Number of maximum threads for this region."
     )
-
     FLAGS, unparsed = parser.parse_known_args()
+    if FLAGS.window_size * 2 + 1 > FLAGS.window_cutoff:
+        sys.stderr.write("ERROR: WINDOW CUTOFF TOO SMALL. MINUMUM SUPPORTED WINDOW SIZE: {2*WINDOW_SIZE + 1}\n")
+        exit()
     parallel_pileup_generator(FLAGS.vcf_region,
                              FLAGS.bam,
                              FLAGS.ref,

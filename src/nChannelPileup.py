@@ -50,15 +50,22 @@ class Pileup:
         self.noneChar = '_'       # character to use for empty positions in the text pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
 
-        self.SNPtoRGB = {'M': [255,255,255],
-                         'A': [255,0,  0],
-                         'C': [255,255,0],
-                         'G': [0,  255,0],
-                         'T': [0,  0,  255],
-                         'I': [255,0,  255],
-                         'D': [0,  255,255],
-                         'N': [0,  0,  0],  # redundant in case of read containing 'N'... should this be independent?
-               self.noneChar: [0,  0,  0],}
+        self.SNPtoRGB = {'M': [1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],
+                         'A': [0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0],
+                         'C': [0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0],
+                         'G': [0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0],
+                         'T': [0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0],
+                         'I': [0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0],
+                         'D': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],
+                         'N': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],  # redundant in case of read containing 'N'... should this be independent?
+               self.noneChar: [0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0],}
+
+        self.decodeMap = ['M', 'A', 'C', 'G', 'T', '-', 'D', '_']
+        self.decodeIndex = list(range(len(self.decodeMap)))
+
+        self.noneAlpha = [1]
+        self.insertAlpha = [1]
+        self.referenceAlpha = [1]
 
         self.sortingKey = {'M':5,
                            'A':0,
@@ -69,13 +76,9 @@ class Pileup:
                            'D':4,
                            'N':7}
 
-        self.RGBtoSNP = [[['N', 'T'], ['G', 'D']], [['A', 'I'], ['C', 'M']]]
-
-        self.RGBtoSNPtext = [[[' ', 'T'], ['G', 'D']], [['A', '_'], ['C', '.']]]
-
         # self.pileupColumns = dict()
         self.inserts = dict()
-        self.pileupImage = [[self.SNPtoRGB[self.noneChar]+[255]]*(self.windowCutoff) for j in range(self.coverageCutoff)]  # mixing tuples (below) and lists... bad!
+        self.pileupImage = [[self.SNPtoRGB[self.noneChar]+self.noneAlpha]*(self.windowCutoff) for j in range(self.coverageCutoff)]  # mixing tuples (below) and lists... bad!
         # print(self.pileupImage)
         self.cigarLegend = ['M', 'I', 'D', 'N', 'S', 'H', 'P', '=', 'X', 'B', '?']  # ?=NM
 
@@ -91,6 +94,22 @@ class Pileup:
         self.pileupEnds = dict()
         self.packMap = dict()
         self.refAnchors = list()
+
+    def generateDecodeMap(self):
+        '''
+        Generate inverse of SNPtoRGB automatically, from any SNPtoRGB dictionary
+        :return:
+        '''
+
+        indexMap = list(range(len(self.SNPtoRGB.keys())))
+        decodeMap = [None for n in range(len(self.SNPtoRGB.keys()))]
+        print(indexMap)
+
+        for key in self.SNPtoRGB:
+            vector = self.SNPtoRGB[key]
+            i = vector.index(1)
+
+            decodeMap[i] = key
 
 
     def generateReadMapping(self,r,startIndex):
@@ -137,6 +156,7 @@ class Pileup:
                 else:
                     encoding = self.SNPtoRGB['M']
 
+
             elif snp == 2:                                          # delete
                 encoding = self.SNPtoRGB['D']
 
@@ -148,7 +168,7 @@ class Pileup:
 
             # print('r',r,'packmap',self.packMap[r],'index',index,'cov cutoff',self.coverageCutoff,len(self.pileupImage),len(self.pileupImage[0]))
             # print(encoding)
-            self.pileupImage[self.packMap[r]][index] = tuple(encoding)      # Finally add the code to the pileup
+            self.pileupImage[self.packMap[r]][index] = encoding      # Finally add the code to the pileup
 
 
     def addInsertEntry(self, readCharacters,n,qualities, r):
@@ -166,9 +186,16 @@ class Pileup:
             self.inserts[i] = []
 
         for c, character in enumerate(readCharacters):
-            if c >= len(self.inserts[i]):
-                self.inserts[i] = self.inserts[i] + [[self.SNPtoRGB['I']+[255]]*(self.windowCutoff)]
-            self.inserts[i][c][self.packMap[r]+1] = tuple(self.SNPtoRGB[character] + [qualities[c]])
+            if c >= len(self.inserts[i]):   # no insert column exists yet
+                self.inserts[i] = self.inserts[i] + [[self.SNPtoRGB['I']+self.insertAlpha]*(self.coverageCutoff+1)]
+
+
+            # print("inserts",i,len(self.inserts))
+            # print("insert column",c,len(self.inserts[i]))
+            # print("qual",c,len(qualities))
+            # print("packmap",self.packMap[r]+1,len(self.inserts[i][c]))
+            # print("r",r)
+            self.inserts[i][c][self.packMap[r]+1] = self.SNPtoRGB[character] + [qualities[c]]
 
 
     def getPileupEncoding(self,cigarCode, refCharacter, readCharacter):
@@ -178,21 +205,6 @@ class Pileup:
             return 'M'
         else:
             return readCharacter
-
-
-    def generateRGBtoSNP(self):
-        '''
-        Generate inverse of SNPtoRGB automatically, from any SNPtoRGB dictionary
-        :return:
-        '''
-
-        self.RGBtoSNP = [[[None for i in range(2)] for j in range(2)] for k in range(2)]
-
-        for item in self.SNPtoRGB.items():
-            bits = [int(i/255) for i in item[1]]
-
-            i1,i2,i3 = bits
-            self.RGBtoSNP[i1][i2][i3] = item[0]
 
 
     def iterateReads(self):
@@ -217,8 +229,8 @@ class Pileup:
         :return:
         '''
         quality = min(baseQuality,mapQuality)       # calculate minimum of quality for base and read quality
-        quality = (1-(10 ** ((quality)/-10)))*255   # convert to probability and scale to 0-255 for pixel encoding
-        quality = int(round(quality))
+        quality = (1-(10 ** ((quality)/-10)))   # convert to probability and scale to 0-255 for pixel encoding
+        # quality = int(round(quality))
 
         return quality
 
@@ -291,9 +303,6 @@ class Pileup:
                                         return
 
 
-                                # readCharacter = self.readSequence[self.readPosition]
-                                # refCharacter = self.refSequence[self.relativeIndexRef]
-                                # cigarCode = self.cigarLegend[snp]
                                 baseQuality = readQualities[self.readPosition]
 
                                 quality = self.calculateQuality(baseQuality, mapQuality)
@@ -342,30 +351,25 @@ class Pileup:
         '''
 
         for character in self.refSequence:
-            encoding = tuple(self.SNPtoRGB[character]+[255])
-            self.referenceRGB.append(tuple(encoding))
+            encoding = self.SNPtoRGB[character]+self.referenceAlpha
+            self.referenceRGB.append(encoding)
 
 
-    def labelInsertRegion(self,c,offset,n):
-        '''
-        Label inserts as some combination of None labels and het/hom ref/alt depending on the length of the insert
-        specified by the vcf.
-        :param c:
-        :param offset:
-        :param n:
-        :return:
-        '''
-        if c in self.insertLengths:                         # if the position is a called variant site
-            l = self.insertLengths[c]  # length of insert
-            if l >= n:                                      # correctly modify the label to fit the insert
-                labelInsert = self.label[c+offset]*n        # using the length of the called variant at pos.
-            else:
-                labelInsert = self.label[c+offset]*l+self.noneLabel*(n-l)
+    def cleanInsertColumns(self,i):
+        # print(self.inserts.keys())
+        for c in range(len(self.inserts[i])):
+            for r in range(self.coverageCutoff+1):
+                prevEntry = self.pileupImage[r][i-1][:-1]   # exclude quality
+                prevEntry = self.decodeMap[prevEntry.index(1)]
+                insertEntry = self.inserts[i][c][r][:-1]    # exclude quality
+                insertEntry = self.decodeMap[insertEntry.index(1)]
 
-        else:
-            labelInsert = self.noneLabel*n                  # otherwise the insert is labeled with None label
+                # print(i,r,prevEntry,insertEntry)
+                if prevEntry == self.noneChar and insertEntry != ['I']:  # previous entry decodes to None character
+                    self.inserts[i][c][r] = self.SNPtoRGB[self.noneChar]+self.noneAlpha
 
-        self.label = self.label[:c+offset+1]+labelInsert+self.label[c+offset+1:]
+            # self.inserts[i].append(insertTemplate)
+            # print(self.inserts[i])
 
 
     def savePileupRGB(self,filename):
@@ -385,16 +389,12 @@ class Pileup:
 
         self.pileupImage = [self.referenceRGB] + self.pileupImage
 
-        image = Image.new("RGBA", (self.coverageCutoff, self.windowCutoff))
-        pixels = image.load()
-        # print(len(self.referenceRGB))
-        # print(image.size)
-        # print(len(self.pileupImage), len(self.pileupImage[0]))
+        pileupArray = [[None for m in range(self.windowCutoff)] for n in range(self.coverageCutoff)]
+
         image_iterator = 0
         i = 0
         while image_iterator < self.windowCutoff:
-            # print(image_iterator)
-            if i in self.deleteLengths:                   # update delete labels
+            if i in self.deleteLengths:                     # update delete labels
                 label = self.label[image_iterator]
                 length = self.deleteLengths[i]
 
@@ -402,30 +402,29 @@ class Pileup:
                     self.label = self.label[:image_iterator+c] + label + self.label[image_iterator+c+1:]
 
             if i in self.inserts:
-                # print("HERE", image_iterator, i)
                 insert_rows = self.inserts[i]
                 n = len(self.inserts[i])
-                self.labelInsertRegion(i-1,image_iterator-i,n)
+                self.labelInsertRegion(i-1,image_iterator-i,n)  # update insert labels
+
+                self.cleanInsertColumns(i)
 
                 for insert in insert_rows:
-                    # print(insert)
                     for j in range(self.coverageCutoff):
-                        pixels[j, image_iterator] = tuple(insert[j]) if j < len(insert) else tuple(self.SNPtoRGB[self.noneChar]+[255])
+                        pileupArray[j][image_iterator] = insert[j] if j < len(insert) else self.SNPtoRGB[self.noneChar]+self.noneAlpha
 
                     image_iterator += 1
                     self.refAnchors.append(i)
                     if image_iterator >= self.windowCutoff:
                         break
 
-            # print(i, image_iterator)
             if image_iterator >= self.windowCutoff:
                 break
 
             for j in range(self.coverageCutoff):
                 if j < self.coverageCutoff:
-                    pixels[j, image_iterator] = tuple(self.pileupImage[j][i]) if i < len(self.pileupImage[j]) else tuple(self.SNPtoRGB[self.noneChar]+[255])
+                    pileupArray[j][image_iterator] = self.pileupImage[j][i] if i < len(self.pileupImage[j]) else self.SNPtoRGB[self.noneChar]+self.noneAlpha
                 else:
-                    pixels[j, image_iterator] = tuple(self.SNPtoRGB[self.noneChar]+[255])
+                    pileupArray[j][image_iterator] = self.SNPtoRGB[self.noneChar]+self.noneAlpha
 
             if i < len(self.refSequence):
                 self.refAnchors.append(i)
@@ -435,8 +434,8 @@ class Pileup:
             image_iterator += 1
             i += 1
 
-        image.save(filename, "PNG")
-        imageFilename = self.outputFilename + ".png"
+        numpy.save(self.outputFilename,pileupArray)
+        imageFilename = self.outputFilename + ".npy"
 
         row = [imageFilename, self.queryStart] + self.refAnchors
         self.smry_ref_pos_file_writer.writerow(row)
@@ -451,10 +450,13 @@ class Pileup:
         return self.sortingKey[code]
 
     def getOutputLabel(self):
-        blankLength = self.windowCutoff - len(self.label)
-        self.label += self.noneLabel*blankLength
-        self.label = self.label[:self.windowCutoff]
-        return self.label
+        blankLength = self.windowCutoff - len(self.label) if len(self.label) < self.windowCutoff else 0
+
+        # print(len(self.label),self.windowCutoff)
+        label = self.label + self.noneLabel*blankLength
+        label = label[:self.windowCutoff]
+        # print(label)
+        return label
 
 
     def decodeRGB(self,filename):
@@ -464,24 +466,23 @@ class Pileup:
         :return:
         '''
 
-        img = Image.open(filename)          # <-- switch this to RGBA
-        pixels = numpy.array(img.getdata())
+        array = numpy.load(filename)
+
+        width,height,depth = array.shape
+
         text = list()
 
-        width,height = img.size
-        depth = 4
+        for w in range(width):
+            row = list()
+            for h in range(height):
+                channels = array[w,h,:-1]
+                index = int(numpy.sum(channels*self.decodeIndex))
 
-        pixels = numpy.reshape(pixels,(height,width,depth))
+                row.append(self.decodeMap[index])
 
-        for h in range(height):
-            row = ''
-            for w in range(width):
-                r,g,b,a = self.RGBtoBinary(pixels[h][w])
+            text.append(''.join(row))
 
-                row += self.RGBtoSNPtext[r][g][b]
-            text.append(row)
-
-        return text
+            return text
 
 
 class PileUpGenerator:
@@ -514,8 +515,7 @@ class PileUpGenerator:
 
         # print(datetime.now() - startTime, "initialized")
         pileup.iterateReads()
-        # print(datetime.now() - startTime, "drafted")
-        # pileup.generatePileupImage()
+        # pileup.generateDecodeMap()
         # print(datetime.now() - startTime, "finalized")
         pileup.savePileupRGB(outputFilename)
         # print(datetime.now() - startTime, "encoded and saved")
@@ -525,9 +525,10 @@ class PileUpGenerator:
         # print(outputFilename)
         # label = pileup.getOutputLabel()
         #
-        # rows = pileup.decodeRGB(outputFilename + ".png")
+        # rows = pileup.decodeRGB(outputFilename + ".npy")
+        # print(label)
         # for r,row in enumerate(rows):
-        #     print(label[r],row)
+        #     print(row)
         # --------------------------------------------------
 
         return pileup.getOutputLabel()
@@ -548,5 +549,4 @@ class PileUpGenerator:
 #     piler = PileUpGenerator(bamFile,fastaFile)
 #     outputLabelString = piler.generatePileup(chromosome=vcf_region, position=position, flankLength=window_size,
 #                                      outputFilename=filename, label=labelString, variantLengths=variantLengths,forceCoverage=True,coverageCutoff=100)
-
 
