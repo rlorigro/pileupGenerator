@@ -8,14 +8,14 @@ class Decoder:
         self.localPath = localPath
 
         # matches
-        # self.decodeToSNPMap = ['M', 'A', 'C', 'G', 'T', 'I', 'D', '_']
-        # self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', '-', 'D', '_']
-        # self.decodeIndex = list(range(len(self.decodeToTextMap)))
+        self.decodeToSNPMap = ['M', 'A', 'C', 'G', 'T', 'I', 'D', '_']
+        self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', '-', 'D', '_']
+        self.decodeIndex = list(range(len(self.decodeToTextMap)))
 
         # no matches
-        self.decodeToSNPMap = ['A', 'C', 'G', 'T', 'I', 'D', '_']
-        self.decodeToTextMap = ['A', 'C', 'G', 'T', '-', 'D', '_']
-        self.decodeIndex = list(range(len(self.decodeToTextMap)))
+        # self.decodeToSNPMap = ['A', 'C', 'G', 'T', 'I', 'D', '_']
+        # self.decodeToTextMap = ['A', 'C', 'G', 'T', '-', 'D', '_']
+        # self.decodeIndex = list(range(len(self.decodeToTextMap)))
 
 
         self.RGBtoText = [[[' ', 'T'], ['G', 'D']], [['A', '_'], ['C', '.']]]
@@ -31,15 +31,15 @@ class Decoder:
 
         self.noneChar = '_'
 
-        self.SNPtoRGB = {#'M': [255,255,255],
+        self.SNPtoRGB = {'M': [255,255,255],
                          'A': [255,0,  0],
                          'C': [255,255,0],
                          'G': [0,  255,0],
                          'T': [0,  0,  255],
-                         'I': [255,255,255],
+                         'I': [127,127,127],
                          'D': [0,  255,255],
                          'N': [0,  255,255],  # redundant in case of read containing 'N'... should this be independent?
-               self.noneChar: [127,127,127]}
+               self.noneChar: [0  ,0  ,0]}
 
 
     def decodeArraysToStdout(self):
