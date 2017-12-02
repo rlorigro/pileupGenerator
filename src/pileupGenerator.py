@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 import sys
 import os
 import csv
-import nChannelPileup as SamPileupBMP
+import PackedPileup as SamPileupBMP
 """
 This program takes an alignment file (bam) and a reference file
 to create a sparse bitmap representation of the pileup. It uses
@@ -247,8 +247,8 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--region",
-        type = str,
-        default = "chr3",
+        type=str,
+        default="chr3",
         help="Site region. Ex: chr3"
     )
     parser.add_argument(
@@ -290,19 +290,19 @@ if __name__ == '__main__':
     parser.add_argument(
         "--map_quality_cutoff",
         type=int,
-        default=5,
+        default=20,
         help="Phred scaled threshold for mapping quality."
     )
     parser.add_argument(
         "--vcf_quality_cutoff",
         type=int,
-        default=0,
+        default=60,
         help="Phred scaled threshold for variant call quality."
     )
     parser.add_argument(
         "--max_threads",
         type=int,
-        default=10,
+        default=5,
         help="Number of maximum threads for this region."
     )
     FLAGS, unparsed = parser.parse_known_args()
