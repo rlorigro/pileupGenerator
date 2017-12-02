@@ -50,15 +50,15 @@ class Pileup:
         self.noneChar = '_'       # character to use for empty positions in the text pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
 
-        self.SNPtoRGB = {'M': [255,255,255],
-                         'A': [255,0,  0],
-                         'C': [255,255,0],
-                         'G': [0,  255,0],
-                         'T': [0,  0,  255],
-                         'I': [255,0,  255],
-                         'D': [0,  255,255],
-                         'N': [0,  0,  0],  # redundant in case of read containing 'N'... should this be independent?
-               self.noneChar: [0,  0,  0],}
+        self.SNPtoRGB = {'M': [255, 0,      0],
+                         'A': [0,   64,     0],
+                         'C': [0,   128,    0],
+                         'G': [0,   192,    0],
+                         'T': [0,   255,    0],
+                         'I': [0,   0,      255],
+                         'D': [0,   0,      170],
+                         'N': [0,   0,      85],  # redundant in case of read containing 'N'... should this be independent?
+               self.noneChar: [0,   0,      85],}
 
         self.sortingKey = {'M':5,
                            'A':0,
