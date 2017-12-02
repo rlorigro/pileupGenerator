@@ -47,7 +47,7 @@ class Pileup:
         self.deltaRead = [1,1,0,0,0,0,0,0,0,0,0]    # key for whether read sequence advances
                                                     #  ['M','I','D','N','S','H','P','=','X','B','NM']
 
-        self.insertCHar = '-'
+        self.insertChar = '-'
         self.noneChar = '_'       # character to use for empty positions in the text pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
 
@@ -104,7 +104,7 @@ class Pileup:
 
         indexMap = list(range(len(self.SNPtoRGB.keys())))
         decodeMap = [None for n in range(len(self.SNPtoRGB.keys()))]
-        print(indexMap)
+        # print(indexMap)
 
         for key in self.SNPtoRGB:
             vector = self.SNPtoRGB[key]
@@ -366,7 +366,7 @@ class Pileup:
                 insertEntry = self.inserts[i][c][r][:-1]    # exclude quality
                 insertEntry = self.decodeMap[insertEntry.index(1)]
 
-                print(i,r,prevEntry,insertEntry)
+                # print(i,r,prevEntry,insertEntry)
                 if prevEntry == self.noneChar: # and insertEntry not in charSet:  # previous entry decodes to None character AND insert entry is not a true sequence
                     self.inserts[i][c][r] = self.SNPtoRGB[self.noneChar]+self.noneAlpha
 
