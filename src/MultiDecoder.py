@@ -6,16 +6,18 @@ class Decoder:
     def __init__(self,summaryFilename,localPath=None):
         self.summaryFile = summaryFilename
         self.localPath = localPath
+        if self.localPath[-1] != '/':
+            self.localPath += '/'
 
         # matches
-        # self.decodeToSNPMap = ['M', 'A', 'C', 'G', 'T', 'I', 'D', '_']
-        # self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', '-', 'D', '_']
-        # self.decodeIndex = list(range(len(self.decodeToTextMap)))
+        self.decodeToSNPMap = ['M', 'A', 'C', 'G', 'T', 'I', 'D', '_']
+        self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', '-', 'D', '_']
+        self.decodeIndex = list(range(len(self.decodeToTextMap)))
 
         # no matches
-        self.decodeToSNPMap = ['A', 'C', 'G', 'T', 'I', 'D', '_']
-        self.decodeToTextMap = ['A', 'C', 'G', 'T', '-', 'D', '_']
-        self.decodeIndex = list(range(len(self.decodeToTextMap)))
+        # self.decodeToSNPMap = ['A', 'C', 'G', 'T', 'I', 'D', '_']
+        # self.decodeToTextMap = ['A', 'C', 'G', 'T', '-', 'D', '_']
+        # self.decodeIndex = list(range(len(self.decodeToTextMap)))
 
 
         self.RGBtoText = [[[' ', 'T'], ['G', 'D']], [['A', '_'], ['C', '.']]]
@@ -31,15 +33,15 @@ class Decoder:
 
         self.noneChar = '_'
 
-        self.SNPtoRGB = {#'M': [255,255,255],
+        self.SNPtoRGB = {'M': [255,255,255],
                          'A': [255,0,  0],
                          'C': [255,255,0],
                          'G': [0,  255,0],
                          'T': [0,  0,  255],
-                         'I': [255,255,255],
+                         'I': [127,127,127],
                          'D': [0,  255,255],
                          'N': [0,  255,255],  # redundant in case of read containing 'N'... should this be independent?
-               self.noneChar: [127,127,127]}
+               self.noneChar: [0  ,0  ,0]}
 
 
     def decodeArraysToStdout(self):
@@ -47,10 +49,6 @@ class Decoder:
             for line in file:
                 arrayPath, label = line.split(',')
 
-                if self.localPath is not None:
-                    arrayFilename = arrayPath.split('/')[-1]
-                    arrayPath = self.localPath + arrayFilename
-                print(arrayPath)
                 if os.path.exists(arrayPath):
                     pileupText = self.decodeArray(arrayPath)
 
@@ -59,7 +57,7 @@ class Decoder:
                     for r, row in enumerate(pileupText):
                         print(row)
                 else:
-                    print("WARNING file not found: ", arrayPath)
+                    print("WARNING file not found: ",arrayPath)
                     pass
 
 
@@ -67,10 +65,6 @@ class Decoder:
         with open(self.summaryFile,'r') as file:
             for line in file:
                 arrayPath, label = line.split(',')
-
-                if self.localPath is not None:
-                    arrayFilename = arrayPath.split('/')[-1]
-                    arrayPath = self.localPath + arrayFilename
 
                 if os.path.exists(arrayPath):
                     self.convertArrayToRGBA(arrayPath)
@@ -83,10 +77,6 @@ class Decoder:
         with open(self.summaryFile,'r') as file:
             for line in file:
                 imagePath, label = line.split(',')
-
-                if self.localPath is not None:
-                    imageFilename = imagePath.split('/')[-1]
-                    imagePath = self.localPath + imageFilename
 
                 if os.path.exists(imagePath):
                     pileupText = self.decodeRGB(imagePath)
@@ -131,7 +121,8 @@ class Decoder:
                 rgba = tuple(map(int,rgba))
                 pixels[h,w] = rgba
 
-        pngFilePath = npyFilePath.split('.')[0] + ".png"
+        pngFilePath = self.localPath + npyFilePath.split('/')[-1].split('.')[0] + ".png"
+        print(pngFilePath)
         image.save(pngFilePath, "PNG")
 
 
@@ -182,7 +173,8 @@ class Decoder:
         return text
 
 
-decoder = Decoder("/Users/kishwar/Kishwar/software/pileupGenerator/src/output/summary_3_75986900-75986930.csv",
-                  localPath="/Users/kishwar/Kishwar/software/pileupGenerator/src/output/")
+decoder = Decoder("/Users/kishwar/Kishwar/pileup-output/run-01122017195751/chr3/summary_3_100921-113629.csv",
+                  localPath="/Users/kishwar/Kishwar/software/pileupGenerator/src/output")
+
 
 decoder.convertArraysToPNG()

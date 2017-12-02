@@ -47,6 +47,7 @@ class Pileup:
         self.deltaRead = [1,1,0,0,0,0,0,0,0,0,0]    # key for whether read sequence advances
                                                     #  ['M','I','D','N','S','H','P','=','X','B','NM']
 
+        self.insertChar = '-'
         self.noneChar = '_'       # character to use for empty positions in the text pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
 
@@ -60,7 +61,7 @@ class Pileup:
                          'N': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],  # redundant in case of read containing 'N'... should this be independent?
                self.noneChar: [0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0],}
 
-        self.decodeMap = ['M', 'A', 'C', 'G', 'T', '-', 'D', '_']
+        self.decodeMap = ['M', 'A', 'C', 'G', 'T', self.insertChar, 'D', self.noneChar]
         self.decodeIndex = list(range(len(self.decodeMap)))
 
         self.noneAlpha = [1]
@@ -103,7 +104,7 @@ class Pileup:
 
         indexMap = list(range(len(self.SNPtoRGB.keys())))
         decodeMap = [None for n in range(len(self.SNPtoRGB.keys()))]
-        print(indexMap)
+        # print(indexMap)
 
         for key in self.SNPtoRGB:
             vector = self.SNPtoRGB[key]
@@ -356,7 +357,8 @@ class Pileup:
 
 
     def cleanInsertColumns(self,i):
-        # print(self.inserts.keys())
+        # charSet = {'A','C','T','G','N','D'}
+
         for c in range(len(self.inserts[i])):
             for r in range(self.coverageCutoff+1):
                 prevEntry = self.pileupImage[r][i-1][:-1]   # exclude quality
@@ -365,11 +367,8 @@ class Pileup:
                 insertEntry = self.decodeMap[insertEntry.index(1)]
 
                 # print(i,r,prevEntry,insertEntry)
-                if prevEntry == self.noneChar and insertEntry != ['I']:  # previous entry decodes to None character
+                if prevEntry == self.noneChar: # and insertEntry not in charSet:  # previous entry decodes to None character AND insert entry is not a true sequence
                     self.inserts[i][c][r] = self.SNPtoRGB[self.noneChar]+self.noneAlpha
-
-            # self.inserts[i].append(insertTemplate)
-            # print(self.inserts[i])
 
 
     def savePileupRGB(self,filename):
