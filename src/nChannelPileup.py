@@ -7,6 +7,7 @@ import sys
 import numpy
 import copy
 import csv
+from scipy import sparse
 """
 This  module takes an alignment file and produces a pileup across all alignments in a query region, and encodes the
 pileup as an image where each x pixel corresponds to base position and y corresponds to coverage depth
@@ -18,11 +19,13 @@ class Pileup:
     position, using the pysam and pyfaidx object provided by PileupGenerator
     '''
 
-    def __init__(self,sam,fasta,smry_ref_pos_file_writer,chromosome,queryStart,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff):
+    def __init__(self,sam,fasta,chromosome,queryStart,flankLength,outputFilename,label,insertLengths,insertGenotypes,deleteLengths,deleteGenotypes,coverageCutoff,mapQualityCutoff,windowCutoff,coverageThreshold):
         self.length = flankLength*2+1
         self.label = label
         self.insertLengths = insertLengths
+        self.insertGenotypes = insertGenotypes
         self.deleteLengths = deleteLengths
+        self.deleteGenotypes = deleteGenotypes
         self.coverageCutoff = coverageCutoff
         self.outputFilename = outputFilename
         self.queryStart = queryStart
@@ -30,7 +33,8 @@ class Pileup:
         self.chromosome = chromosome
         self.mapQualityCutoff = mapQualityCutoff
         self.windowCutoff = windowCutoff
-        self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
+        self.coverageThreshold = coverageThreshold
+        # self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
 
         # pysam fetch reads
         self.localReads = sam.fetch("chr"+self.chromosome, start=self.queryStart, end=self.queryEnd)
@@ -95,6 +99,8 @@ class Pileup:
         self.pileupEnds = dict()
         self.packMap = dict()
         self.refAnchors = list()
+        self.coveragePerColumn = defaultdict(int)
+
 
     def generateDecodeMap(self):
         '''
@@ -146,6 +152,7 @@ class Pileup:
         if snp < 4 and snp != 1:
             index = self.relativeIndexRef
             encoding = None
+            coverage = None
             self.pileupEnds[self.packMap[r]] = columnIndex
 
             if snp == 0:                                            # match
@@ -157,13 +164,17 @@ class Pileup:
                 else:
                     encoding = self.SNPtoRGB['M']
 
+                coverage = 1
 
             elif snp == 2:                                          # delete
                 encoding = self.SNPtoRGB['D']
+                coverage = 1
 
             elif snp == 3:                                          # refskip
                 encoding = self.SNPtoRGB['N']
+                coverage = 0
 
+            self.coveragePerColumn[index] += coverage
 
             encoding = encoding+[quality]  # append the quality Alpha value and store as tuple
 
@@ -335,9 +346,9 @@ class Pileup:
         if c in self.insertLengths:                         # if the position is a variant site
             l = self.insertLengths[c]  # length of insert
             if l >= n:                                      # correctly modify the label to fit the insert
-                labelInsert = self.label[c+offset]*n        # using the length of the called variant at pos.
+                labelInsert = self.insertGenotypes[c]*n        # using the length of the called variant at pos.
             else:
-                labelInsert = self.label[c+offset]*l+self.noneLabel*(n-l)
+                labelInsert = self.insertGenotypes[c]*l+self.noneLabel*(n-l)
 
         else:
             labelInsert = self.noneLabel*n                  # otherwise the insert is labeled with None label
@@ -351,9 +362,20 @@ class Pileup:
         :return:
         '''
 
-        for character in self.refSequence:
+        label = list(self.label)
+
+        for c,character in enumerate(self.refSequence):
+            if character == 'N':    # no reference? no label.
+                label[c] = '0'
+
+            # check coverage dict
+            if self.coveragePerColumn[c] < self.coverageThreshold:
+                label[c] = '0'
+
             encoding = self.SNPtoRGB[character]+self.referenceAlpha
             self.referenceRGB.append(encoding)
+
+        self.label = ''.join(label)
 
 
     def cleanInsertColumns(self,i):
@@ -394,7 +416,8 @@ class Pileup:
         i = 0
         while image_iterator < self.windowCutoff:
             if i in self.deleteLengths:                     # update delete labels
-                label = self.label[image_iterator]
+                # label = self.label[image_iterator]
+                label = self.deleteGenotypes[i]
                 length = self.deleteLengths[i]
 
                 for c in range(1, length+1):
@@ -433,11 +456,16 @@ class Pileup:
             image_iterator += 1
             i += 1
 
-        numpy.save(self.outputFilename,pileupArray)
-        imageFilename = self.outputFilename + ".npy"
 
-        row = [imageFilename, self.queryStart] + self.refAnchors
-        self.smry_ref_pos_file_writer.writerow(row)
+        pileupArray = numpy.array(pileupArray)
+        pileupArray2d = pileupArray.reshape((pileupArray.shape[0],-1))
+
+        sparseMatrix = sparse.csc_matrix(pileupArray2d)
+
+        # numpy.save(self.outputFilename,pileupArray) # <- waste of space
+
+        arrayFilename = self.outputFilename + ".npz"
+        sparse.save_npz(arrayFilename,sparseMatrix)
 
 
     def RGBtoBinary(self,rgb):
@@ -489,13 +517,13 @@ class PileUpGenerator:
     Creates pileups of aligned reads given a SAM/BAM alignment and FASTA reference
     '''
 
-    def __init__(self,alignmentFile, referenceFile, smry_ref_pos_file_writer):
+    def __init__(self,alignmentFile, referenceFile):    #, smry_ref_pos_file_writer):
         self.sam = pysam.AlignmentFile(alignmentFile,"rb")
         self.fasta = Fasta(referenceFile,as_raw=True,sequence_always_upper=True)
-        self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
+        # self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
 
 
-    def generatePileup(self,chromosome,position,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff):
+    def generatePileup(self,chromosome,position,flankLength,outputFilename,label,insertLengths,insertGenotypes,deleteLengths,deleteGenotypes,coverageCutoff,mapQualityCutoff,windowCutoff,coverageThreshold):
         '''
         Generate a pileup at a given position
         :param queryStart:
@@ -509,7 +537,21 @@ class PileUpGenerator:
 
 
         startTime = datetime.now()
-        pileup = Pileup(self.sam,self.fasta,self.smry_ref_pos_file_writer,chromosome,queryStart,flankLength,outputFilename,label,insertLengths=insertLengths,deleteLengths=deleteLengths,windowCutoff=windowCutoff,coverageCutoff=coverageCutoff,mapQualityCutoff=mapQualityCutoff)
+        pileup = Pileup(self.sam,
+                        self.fasta,
+                        chromosome=chromosome,
+                        queryStart=queryStart,
+                        flankLength=flankLength,
+                        outputFilename=outputFilename,
+                        label=label,
+                        insertLengths=insertLengths,
+                        insertGenotypes=insertGenotypes,
+                        deleteLengths=deleteLengths,
+                        deleteGenotypes=deleteGenotypes,
+                        windowCutoff=windowCutoff,
+                        coverageCutoff=coverageCutoff,
+                        mapQualityCutoff=mapQualityCutoff,
+                        coverageThreshold=coverageThreshold)
 
 
         # print(datetime.now() - startTime, "initialized")
@@ -530,7 +572,7 @@ class PileUpGenerator:
         #     print(row)
         # --------------------------------------------------
 
-        return pileup.getOutputLabel()
+        return pileup.getOutputLabel(), pileup.queryStart, pileup.refAnchors
 
 #
 # bamFile = "deePore/data/chr3_200k.bam"
