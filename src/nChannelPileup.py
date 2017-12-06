@@ -7,6 +7,9 @@ import sys
 import numpy
 import copy
 import csv
+from scipy import sparse
+from scipy import misc
+
 """
 This  module takes an alignment file and produces a pileup across all alignments in a query region, and encodes the
 pileup as an image where each x pixel corresponds to base position and y corresponds to coverage depth
@@ -18,11 +21,13 @@ class Pileup:
     position, using the pysam and pyfaidx object provided by PileupGenerator
     '''
 
-    def __init__(self,sam,fasta,smry_ref_pos_file_writer,chromosome,queryStart,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff):
+    def __init__(self,sam,fasta,chromosome,queryStart,flankLength,outputFilename,label,insertLengths,insertGenotypes,deleteLengths,deleteGenotypes,coverageCutoff,mapQualityCutoff,windowCutoff,coverageThreshold):
         self.length = flankLength*2+1
         self.label = label
         self.insertLengths = insertLengths
+        self.insertGenotypes = insertGenotypes
         self.deleteLengths = deleteLengths
+        self.deleteGenotypes = deleteGenotypes
         self.coverageCutoff = coverageCutoff
         self.outputFilename = outputFilename
         self.queryStart = queryStart
@@ -30,7 +35,8 @@ class Pileup:
         self.chromosome = chromosome
         self.mapQualityCutoff = mapQualityCutoff
         self.windowCutoff = windowCutoff
-        self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
+        self.coverageThreshold = coverageThreshold
+        # self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
 
         # pysam fetch reads
         self.localReads = sam.fetch("chr"+self.chromosome, start=self.queryStart, end=self.queryEnd)
@@ -51,36 +57,30 @@ class Pileup:
         self.noneChar = '_'       # character to use for empty positions in the text pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
 
-        self.SNPtoRGB = {'M': [1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],
-                         'A': [0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0],
-                         'C': [0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0],
-                         'G': [0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0],
-                         'T': [0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0],
-                         'I': [0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0],
-                         'D': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],
-                         'N': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],  # redundant in case of read containing 'N'... should this be independent?
-               self.noneChar: [0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0],}
+        self.SNPtoRGB = {'M': [1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],
+                         'A': [0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],
+                         'C': [0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0],
+                         'G': [0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0],
+                         'T': [0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0],
+                        'MM': [0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0],
+                         'I': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0],
+                         'D': [0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],
+                         'N': [0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],  # redundant in case of read containing 'N'... should this be independent?
+               self.noneChar: [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0]}
 
-        self.decodeMap = ['M', 'A', 'C', 'G', 'T', self.insertChar, 'D', self.noneChar]
+        self.emptyChannelVector = [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
+
+        self.channelKey = {key:value.index(1.0) for key, value in self.SNPtoRGB.items()}
+
+        self.decodeMap = ['M', 'A', 'C', 'G', 'T', 'MM', self.insertChar, 'D', self.noneChar]
         self.decodeIndex = list(range(len(self.decodeMap)))
 
         self.noneAlpha = [1]
         self.insertAlpha = [1]
         self.referenceAlpha = [1]
 
-        self.sortingKey = {'M':5,
-                           'A':0,
-                           'C':1,
-                           'G':2,
-                           'T':3,
-                           'I':6,
-                           'D':4,
-                           'N':7}
-
-        # self.pileupColumns = dict()
         self.inserts = dict()
         self.pileupImage = [[self.SNPtoRGB[self.noneChar]+self.noneAlpha]*(self.windowCutoff) for j in range(self.coverageCutoff)]  # mixing tuples (below) and lists... bad!
-        # print(self.pileupImage)
         self.cigarLegend = ['M', 'I', 'D', 'N', 'S', 'H', 'P', '=', 'X', 'B', '?']  # ?=NM
 
         self.cigarTuples = None
@@ -95,6 +95,9 @@ class Pileup:
         self.pileupEnds = dict()
         self.packMap = dict()
         self.refAnchors = list()
+        self.coveragePerColumn = defaultdict(int)
+        self.arrayShape = None
+
 
     def generateDecodeMap(self):
         '''
@@ -102,7 +105,7 @@ class Pileup:
         :return:
         '''
 
-        indexMap = list(range(len(self.SNPtoRGB.keys())))
+        # indexMap = list(range(len(self.SNPtoRGB.keys())))
         decodeMap = [None for n in range(len(self.SNPtoRGB.keys()))]
         # print(indexMap)
 
@@ -146,6 +149,7 @@ class Pileup:
         if snp < 4 and snp != 1:
             index = self.relativeIndexRef
             encoding = None
+            coverage = None
             self.pileupEnds[self.packMap[r]] = columnIndex
 
             if snp == 0:                                            # match
@@ -153,19 +157,32 @@ class Pileup:
                 ntRef = self.refSequence[self.relativeIndexRef]
 
                 if nt != ntRef:
-                    encoding = self.SNPtoRGB[nt]  # Mismatch (specify the alt)
+                    if nt != 'N':
+                        encoding = list(self.SNPtoRGB['MM'])  # Mismatch (specify the alt)
+                    else:
+                        encoding = list(self.emptyChannelVector)
                 else:
-                    encoding = self.SNPtoRGB['M']
+                    encoding = list(self.SNPtoRGB['M'])
 
+                ntChannel = self.channelKey[nt]
+
+                encoding[ntChannel] = 1.0
+
+                coverage = 1
 
             elif snp == 2:                                          # delete
-                encoding = self.SNPtoRGB['D']
+                encoding = list(self.SNPtoRGB['D'])
+                coverage = 1
 
             elif snp == 3:                                          # refskip
-                encoding = self.SNPtoRGB['N']
+                encoding = list(self.SNPtoRGB['N'])
+                coverage = 0
 
+            self.coveragePerColumn[index] += coverage
 
             encoding = encoding+[quality]  # append the quality Alpha value and store as tuple
+
+            # print(snp,index,r,encoding)
 
             # print('r',r,'packmap',self.packMap[r],'index',index,'cov cutoff',self.coverageCutoff,len(self.pileupImage),len(self.pileupImage[0]))
             # print(encoding)
@@ -190,13 +207,19 @@ class Pileup:
             if c >= len(self.inserts[i]):   # no insert column exists yet
                 self.inserts[i] = self.inserts[i] + [[self.SNPtoRGB['I']+self.insertAlpha]*(self.coverageCutoff+1)]
 
-
             # print("inserts",i,len(self.inserts))
             # print("insert column",c,len(self.inserts[i]))
             # print("qual",c,len(qualities))
             # print("packmap",self.packMap[r]+1,len(self.inserts[i][c]))
             # print("r",r)
-            self.inserts[i][c][self.packMap[r]+1] = self.SNPtoRGB[character] + [qualities[c]]
+
+            encoding = list(self.SNPtoRGB[character])
+            channelIndex = self.channelKey['I']
+
+            # print(encoding,character)
+            encoding[channelIndex] = 1.0
+            # print(encoding)
+            self.inserts[i][c][self.packMap[r]+1] = encoding + [qualities[c]]
 
 
     def getPileupEncoding(self,cigarCode, refCharacter, readCharacter):
@@ -258,7 +281,6 @@ class Pileup:
         else:
             self.refStart = refPositions[0] + 1
             self.cigarTuples = read.cigartuples
-
 
             refPositions = None  # dump
 
@@ -335,9 +357,9 @@ class Pileup:
         if c in self.insertLengths:                         # if the position is a variant site
             l = self.insertLengths[c]  # length of insert
             if l >= n:                                      # correctly modify the label to fit the insert
-                labelInsert = self.label[c+offset]*n        # using the length of the called variant at pos.
+                labelInsert = self.insertGenotypes[c]*n        # using the length of the called variant at pos.
             else:
-                labelInsert = self.label[c+offset]*l+self.noneLabel*(n-l)
+                labelInsert = self.insertGenotypes[c]*l+self.noneLabel*(n-l)
 
         else:
             labelInsert = self.noneLabel*n                  # otherwise the insert is labeled with None label
@@ -351,13 +373,28 @@ class Pileup:
         :return:
         '''
 
-        for character in self.refSequence:
+        label = list(self.label)
+
+        for c,character in enumerate(self.refSequence):
+            if character == 'N':    # no reference? no label.
+                label[c] = '0'
+
+            # check coverage dict
+            if self.coveragePerColumn[c] < self.coverageThreshold:
+                label[c] = '0'
+
             encoding = self.SNPtoRGB[character]+self.referenceAlpha
             self.referenceRGB.append(encoding)
 
+        self.label = ''.join(label)
+
 
     def cleanInsertColumns(self,i):
-        # charSet = {'A','C','T','G','N','D'}
+        '''
+        If an insert column position doesn't have read data to its left, it should be a None,
+        :param i:
+        :return:
+        '''
 
         for c in range(len(self.inserts[i])):
             for r in range(self.coverageCutoff+1):
@@ -394,7 +431,8 @@ class Pileup:
         i = 0
         while image_iterator < self.windowCutoff:
             if i in self.deleteLengths:                     # update delete labels
-                label = self.label[image_iterator]
+                # label = self.label[image_iterator]
+                label = self.deleteGenotypes[i]
                 length = self.deleteLengths[i]
 
                 for c in range(1, length+1):
@@ -433,20 +471,36 @@ class Pileup:
             image_iterator += 1
             i += 1
 
-        numpy.save(self.outputFilename,pileupArray)
-        imageFilename = self.outputFilename + ".npy"
 
-        row = [imageFilename, self.queryStart] + self.refAnchors
-        self.smry_ref_pos_file_writer.writerow(row)
+        pileupArray = numpy.array(pileupArray)
+
+        #------
+        pileupArray2d = pileupArray.reshape((pileupArray.shape[0],-1))
+        self.arrayShape = pileupArray.shape
+
+        misc.imsave(self.outputFilename+".png",pileupArray2d,format="PNG")
+        #------
 
 
-    def RGBtoBinary(self,rgb):
-        return [int(value/255) for value in rgb]
+        #------
+        # pileupArray2d = pileupArray.reshape((pileupArray.shape[0],-1))
+        # sparseMatrix = sparse.csc_matrix(pileupArray2d)
+        #
+        # arrayFilename = self.outputFilename + ".npz"
+        # sparse.save_npz(arrayFilename,sparseMatrix)
+        #------
 
-    def RGBtoSortingKey(self,rgb):
-        i1,i2,i3 = self.RGBtoBinary(rgb)
-        code = self.RGBtoSNP[i1][i2][i3]
-        return self.sortingKey[code]
+        # numpy.save(self.outputFilename,pileupArray) # <- waste of space
+
+
+
+    # def RGBtoBinary(self,rgb):
+    #     return [int(value/255) for value in rgb]
+    #
+    # def RGBtoSortingKey(self,rgb):
+    #     i1,i2,i3 = self.RGBtoBinary(rgb)
+    #     code = self.RGBtoSNP[i1][i2][i3]
+    #     return self.sortingKey[code]
 
     def getOutputLabel(self):
         blankLength = self.windowCutoff - len(self.label) if len(self.label) < self.windowCutoff else 0
@@ -458,30 +512,30 @@ class Pileup:
         return label
 
 
-    def decodeRGB(self,filename):
-        '''
-        Read a RGB and convert to a text alignment
-        :param filename:
-        :return:
-        '''
-
-        array = numpy.load(filename)
-
-        width,height,depth = array.shape
-
-        text = list()
-
-        for w in range(width):
-            row = list()
-            for h in range(height):
-                channels = array[w,h,:-1]
-                index = int(numpy.sum(channels*self.decodeIndex))
-
-                row.append(self.decodeMap[index])
-
-            text.append(''.join(row))
-
-            return text
+    # def decodeRGB(self,filename):
+    #     '''
+    #     Read a RGB and convert to a text alignment
+    #     :param filename:
+    #     :return:
+    #     '''
+    #
+    #     array = numpy.load(filename)
+    #
+    #     width,height,depth = array.shape
+    #
+    #     text = list()
+    #
+    #     for w in range(width):
+    #         row = list()
+    #         for h in range(height):
+    #             channels = array[w,h,:-1]
+    #             index = int(numpy.sum(channels*self.decodeIndex))
+    #
+    #             row.append(self.decodeMap[index])
+    #
+    #         text.append(''.join(row))
+    #
+    #         return text
 
 
 class PileUpGenerator:
@@ -489,13 +543,11 @@ class PileUpGenerator:
     Creates pileups of aligned reads given a SAM/BAM alignment and FASTA reference
     '''
 
-    def __init__(self,alignmentFile, referenceFile, smry_ref_pos_file_writer):
+    def __init__(self,alignmentFile, referenceFile):    #, smry_ref_pos_file_writer):
         self.sam = pysam.AlignmentFile(alignmentFile,"rb")
         self.fasta = Fasta(referenceFile,as_raw=True,sequence_always_upper=True)
-        self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
 
-
-    def generatePileup(self,chromosome,position,flankLength,outputFilename,label,insertLengths,deleteLengths,coverageCutoff,mapQualityCutoff,windowCutoff):
+    def generatePileup(self,chromosome,position,flankLength,outputFilename,label,insertLengths,insertGenotypes,deleteLengths,deleteGenotypes,coverageCutoff,mapQualityCutoff,windowCutoff,coverageThreshold):
         '''
         Generate a pileup at a given position
         :param queryStart:
@@ -509,7 +561,21 @@ class PileUpGenerator:
 
 
         startTime = datetime.now()
-        pileup = Pileup(self.sam,self.fasta,self.smry_ref_pos_file_writer,chromosome,queryStart,flankLength,outputFilename,label,insertLengths=insertLengths,deleteLengths=deleteLengths,windowCutoff=windowCutoff,coverageCutoff=coverageCutoff,mapQualityCutoff=mapQualityCutoff)
+        pileup = Pileup(self.sam,
+                        self.fasta,
+                        chromosome=chromosome,
+                        queryStart=queryStart,
+                        flankLength=flankLength,
+                        outputFilename=outputFilename,
+                        label=label,
+                        insertLengths=insertLengths,
+                        insertGenotypes=insertGenotypes,
+                        deleteLengths=deleteLengths,
+                        deleteGenotypes=deleteGenotypes,
+                        windowCutoff=windowCutoff,
+                        coverageCutoff=coverageCutoff,
+                        mapQualityCutoff=mapQualityCutoff,
+                        coverageThreshold=coverageThreshold)
 
 
         # print(datetime.now() - startTime, "initialized")
@@ -530,7 +596,7 @@ class PileUpGenerator:
         #     print(row)
         # --------------------------------------------------
 
-        return pileup.getOutputLabel()
+        return pileup.getOutputLabel(), pileup.queryStart, pileup.refAnchors, pileup.arrayShape
 
 #
 # bamFile = "deePore/data/chr3_200k.bam"

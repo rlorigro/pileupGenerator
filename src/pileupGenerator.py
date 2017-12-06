@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 import sys
 import os
 import csv
-import PackedPileup as SamPileupBMP
+import nChannelPileup as SamPileupBMP
 """
 This program takes an alignment file (bam) and a reference file
 to create a sparse bitmap representation of the pileup. It uses
@@ -16,7 +16,8 @@ bits. It creates a large binary sparse matrix too.
 """
 
 allVariantRecord = {}
-subregion = ''
+# subregion = ':142535300-142535600'
+subregion = ':100000-200000'
 # subregion = ''
 cutoffOutput = False
 cutoff = 350
@@ -38,18 +39,19 @@ def getGTField(rec):
     return str(rec).rstrip().split('\t')[-1].split(':')[0].replace('/', '|').replace('\\', '|').split('|')
 
 
-def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff):
+def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
     vcf_in = VariantFile(vcfFile)
     for rec in vcf_in.fetch(region="chr"+vcf_region+subregion):
         gtField = getGTField(rec)   # genotype according to the vcf
         genotypeClass = getClassForGenotype(gtField)
+        uncorrectedGenotypeClass = None
 
-        if genotypeClass != 1 and rec.qual is not None and rec.qual >= qualityCutoff:
-            # print(rec)
+        if genotypeClass != 1 and rec.qual is not None and rec.qual > qualityCutoff:
             alleles = rec.alleles
 
             insertLength = None
             deleteLength = None
+            isMismatch = False
 
             altAlleles = [alleles[int(gt)] for gt in gtField if gt!='0']
 
@@ -89,55 +91,81 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff):
                 elif longestLength < refLength:
                     deleteLength = refLength - longestLength
 
-            allVariantRecord[rec.start] = (genotypeClass, insertLength, deleteLength)
+            if longestLength == refLength or shortestLength == refLength:   # SNP is here
+                isMismatch = True
+
+            if not isMismatch and (insertLength is not None or deleteLength is not None):
+                uncorrectedGenotypeClass = genotypeClass
+                genotypeClass = 1
+
+            else:
+                uncorrectedGenotypeClass = genotypeClass
+
+            allVariantRecord[rec.start] = (genotypeClass, insertLength, deleteLength, isMismatch, uncorrectedGenotypeClass)
 
 
 def getLabel(start, end):
     labelStr = ''              # draft of the labelling string, assuming no inserts
     insertLengths = dict()     # stores length of longest variant for labelling of inserts during pileup generation
     deleteLengths = dict()
-
-    insertCount = 0
-    deleteCount = 0
+    deleteGenotypes = dict()
+    insertGenotypes = dict()
+    mismatches = set()
 
     for j,i in enumerate(range(start, end)):
         if i in allVariantRecord.keys():
-            labelStr += str(allVariantRecord[i][0])
+            gt = str(allVariantRecord[i][0])
+            uncorrectedGenotypeClass = str(allVariantRecord[i][4])
+            labelStr += gt
 
-            # if insertCount == 0:
             if allVariantRecord[i][1] is not None:
                 insertLengths[j] = int(allVariantRecord[i][1])
-            #         insertCount = allVariantRecord[i][1] - 1
-            # else:
-            #     insertCount -= 1
-            #
-            # if deleteCount == 0:
+                insertGenotypes[j] = uncorrectedGenotypeClass
             if allVariantRecord[i][2] is not None:
                 deleteLengths[j] = int(allVariantRecord[i][2])
-            #         deleteCount = allVariantRecord[i][2] - 1
-            # else:
-            #     deleteCount -= 1
+                deleteGenotypes[j] = uncorrectedGenotypeClass
+            if allVariantRecord[i][3] == True:
+                mismatches.add(j)
 
         else:
-            labelStr += str(1)
-    return labelStr, insertLengths, deleteLengths
+            labelStr += str(1)  # hom
+    return labelStr, insertLengths, insertGenotypes, deleteLengths, deleteGenotypes, mismatches
+
+
+# def removeAnchorLabels(refStart,refPositions,label,mismatches,inserts,deletes):
+#     print('M',mismatches)
+#     print('I',deletes)
+#     print('D',inserts)
+#     print(label)
+#
+#     label = list(label)
+#
+#     for p,position in enumerate(refPositions):
+#         # position-=1
+#         # print(absolutePosition)
+#         if position not in mismatches and (position in inserts or position in deletes):
+#             print("TRUE",position)
+#             label[position] = '1'
+#
+#     print(''.join(label))
+#     print()
+#     return ''.join(label)
 
 
 def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff,
-                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff):
+                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, coverage_threshold):
     files = list()
     cnt = 0
     start_timer = timer()
-    populateRecordDictionary(vcf_region, vcfFile, vcf_quality_cutoff)
-    # print(output_dir + "summary" + '_' + vcf_region + vcf_subregion + ".csv")
-    smry = open(output_dir + "summary" + '_' + vcf_region + "_" + vcf_subregion[1:] + ".csv", 'w')
-    smry_ref_pos_file = open(output_dir + "ref_positions_" + vcf_region + "_" + vcf_subregion[1:] + ".csv", 'w')
+    populateRecordDictionary(vcf_region, vcfFile)
+    smry = open(output_dir + "summary" + '_' + vcf_region + vcf_subregion + ".csv", 'w')
+    smry_ref_pos_file = open(output_dir + "ref_positions_" + vcf_region + vcf_subregion + ".csv", 'w')
     smry_ref_pos_file_writer = csv.writer(smry_ref_pos_file)
     try:
         os.stat("tmp/")
     except:
         os.mkdir("tmp/")
-    log = open("tmp/" + "log_" + vcf_region + "_" + vcf_subregion[1:] + ".txt", 'w')
+    log = open("tmp/" + "log_" + vcf_region + vcf_subregion + ".txt", 'w')
     files.append(smry)
     files.append(log)
     files.append(smry_ref_pos_file)
@@ -151,34 +179,61 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     log.write("Coverage cutoff: \t%s\n" % coverage_cutoff)
     log.write("VCF quality cutoff: \t%s\n" % vcf_quality_cutoff)
     log.write("Map quality cutoff: \t%s\n" % map_quality_cutoff)
+    log.write("Coverage threshold: \t%s\n" % coverage_threshold)
 
-
-    p = SamPileupBMP.PileUpGenerator(bamFile, refFile, smry_ref_pos_file_writer)
-
+    p = SamPileupBMP.PileUpGenerator(bamFile, refFile) #, smry_ref_pos_file_writer)
+    prev_start = None
+    prev_end = None
     for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region+vcf_subregion):
-        if rec.qual is not None and rec.qual >= vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
-            # print(rec)
+        if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
             start = rec.pos - window_size - 1
             end = rec.pos + window_size
-            labelString, insertLengths, deleteLengths = getLabel(start, end)
+            if prev_start is not None and prev_end is not None and rec.pos < prev_end - 10:
+                continue
+            else:
+                prev_start = start
+                prev_end = end
+
+            labelString, insertLengths, insertGenotypes, deleteLengths, deleteGenotypes, mismatches = getLabel(start, end)
+
             filename = output_dir + rec.chrom + "_" + str(rec.pos)
-            outputLabelString = p.generatePileup(chromosome=vcf_region,
-                                                 position=rec.pos - 1,
-                                                 flankLength=window_size,
-                                                 coverageCutoff=coverage_cutoff,
-                                                 windowCutoff=window_cutoff,
-                                                 mapQualityCutoff=map_quality_cutoff,
-                                                 outputFilename=filename,
-                                                 label=labelString,
-                                                 insertLengths=insertLengths,
-                                                 deleteLengths=deleteLengths
-                                                 )
+
+            outputLabelString,refStartPosition,refAnchorPositions,arrayShape = p.generatePileup(chromosome=vcf_region,
+                                                                                     position=rec.pos - 1,
+                                                                                     flankLength=window_size,
+                                                                                     coverageCutoff=coverage_cutoff,
+                                                                                     windowCutoff=window_cutoff,
+                                                                                     mapQualityCutoff=map_quality_cutoff,
+                                                                                     outputFilename=filename,
+                                                                                     label=labelString,
+                                                                                     insertLengths=insertLengths,
+                                                                                     insertGenotypes=insertGenotypes,
+                                                                                     deleteLengths=deleteLengths,
+                                                                                     deleteGenotypes=deleteGenotypes,
+                                                                                     coverageThreshold=coverage_threshold
+                                                                                     )
+
+            # print(filename)
+            # print(labelString)
+            # print(outputLabelString)
+
+            # outputLabelString = removeAnchorLabels(refStart=rec.pos,
+            #                                        label=outputLabelString,
+            #                                        refPositions=refAnchorPositions,
+            #                                        mismatches=mismatches,
+            #                                        inserts=insertLengths,
+            #                                        deletes=deleteLengths)
+
+
             cnt += 1
             if cnt % 1000 == 0:
                 end_timer = timer()
                 print(str(cnt) + " Records done", file=sys.stderr)
                 print("TIME elapsed " + str(end_timer - start_timer), file=sys.stderr)
-            smry.write(os.path.abspath(filename) + ".npy," + str(outputLabelString)+'\n')
+
+            smry.write(os.path.abspath(filename) + ".png," + str(outputLabelString) + ',' + ','.join(map(str,arrayShape))+'\n')
+            row = [os.path.abspath(filename) + ".png,", refStartPosition]+refAnchorPositions
+            smry_ref_pos_file_writer.writerow(row)
 
             if cutoffOutput:
                 if cnt > cutoff:
@@ -201,7 +256,7 @@ def chunkIt(seq, num):
 
 
 def parallel_pileup_generator(vcf_region, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff,
-                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, threads):
+                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, threads, coverage_threshold):
     all_positions = []
     for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region):
         if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
@@ -217,9 +272,8 @@ def parallel_pileup_generator(vcf_region, bamFile, refFile, vcfFile, output_dir,
         vcf_subregion = "-"+str(starts[i])+"-"+str(ends[i])
         p = Process(target=generatePileupBasedonVCF, args=(vcf_region, vcf_subregion, bamFile, refFile, vcfFile,
                                                            output_dir, window_size, window_cutoff, coverage_cutoff,
-                                                           map_quality_cutoff, vcf_quality_cutoff,))
+                                                           map_quality_cutoff, vcf_quality_cutoff,coverage_threshold,))
         p.start()
-
 
 if __name__ == '__main__':
     '''
@@ -247,8 +301,8 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--region",
-        type=str,
-        default="chr3",
+        type = str,
+        default = "chr3",
         help="Site region. Ex: chr3"
     )
     parser.add_argument(
@@ -266,31 +320,31 @@ if __name__ == '__main__':
     parser.add_argument(
         "--window_size",
         type=int,
-        default=25,
+        default=100,
         help="Window size of query region."
     )
     parser.add_argument(
         "--window_cutoff",
         type=int,
-        default=60,
+        default=70,
         help="Size of output image."
     )
     parser.add_argument(
         "--coverage",
         type=int,
-        default=50,
+        default=280,
         help="Read coverage, default is 50x."
     )
     parser.add_argument(
         "--coverage_cutoff",
         type=int,
-        default=50,
+        default=300,
         help="Size of output image."
     )
     parser.add_argument(
         "--map_quality_cutoff",
         type=int,
-        default=20,
+        default=10,
         help="Phred scaled threshold for mapping quality."
     )
     parser.add_argument(
@@ -298,6 +352,12 @@ if __name__ == '__main__':
         type=int,
         default=60,
         help="Phred scaled threshold for variant call quality."
+    )
+    parser.add_argument(
+        "--coverage_threshold",
+        type=int,
+        default=12,
+        help="Threshold below which to remove training label from pileup"
     )
     parser.add_argument(
         "--max_threads",
@@ -310,16 +370,18 @@ if __name__ == '__main__':
         sys.stderr.write("ERROR: WINDOW CUTOFF TOO SMALL. MINUMUM SUPPORTED WINDOW SIZE: {2*WINDOW_SIZE + 1}\n")
         exit()
     parallel_pileup_generator(FLAGS.vcf_region,
-                             FLAGS.bam,
-                             FLAGS.ref,
-                             FLAGS.vcf,
-                             FLAGS.output_dir,
-                             FLAGS.window_size,
-                             FLAGS.window_cutoff,
-                             FLAGS.coverage_cutoff,
-                             FLAGS.map_quality_cutoff,
-                             FLAGS.vcf_quality_cutoff,
-                             FLAGS.max_threads)
+                              FLAGS.bam,
+                              FLAGS.ref,
+                              FLAGS.vcf,
+                              FLAGS.output_dir,
+                              FLAGS.window_size,
+                              FLAGS.window_cutoff,
+                              FLAGS.coverage_cutoff,
+                              FLAGS.map_quality_cutoff,
+                              FLAGS.vcf_quality_cutoff,
+                              FLAGS.max_threads,
+                              FLAGS.coverage_threshold)
+
     # generatePileupBasedonVCF(FLAGS.vcf_region,
     #                          subregion,
     #                          FLAGS.bam,
@@ -330,8 +392,9 @@ if __name__ == '__main__':
     #                          FLAGS.window_cutoff,
     #                          FLAGS.coverage_cutoff,
     #                          FLAGS.map_quality_cutoff,
-    #                          FLAGS.vcf_quality_cutoff)
+    #                          FLAGS.vcf_quality_cutoff,
+    #                          FLAGS.coverage_threshold)
 
 
 # example usage:
-# python3 "deePore/src/utils/pileupGenerator.py" --bam "deePore/data/chr3_200k.bam" --ref "deePore/data/chr3.fa" --vcf "deePore/data/NA12878_S1.genome.vcf.gz" --region "chr3" --output_dir "deePore/data/test2/" --window_size 25 >deePore/data/stdout_final.txt
+# python3 "src/pileupGenerator.py" --bam "data/chr3_200k.bam" --ref "data/chr3.fa" --vcf "data/NA12878_S1.genome.vcf.gz" --region "chr3" --vcf_region '3' --output_dir "data/errors/" --window_size 25 >data/out.txt
