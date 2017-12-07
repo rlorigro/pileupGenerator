@@ -356,7 +356,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--coverage_threshold",
         type=int,
-        default=12,
+        default=10,
         help="Threshold below which to remove training label from pileup"
     )
     parser.add_argument(

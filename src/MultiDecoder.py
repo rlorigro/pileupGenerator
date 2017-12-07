@@ -123,7 +123,7 @@ class Decoder:
         # print(inputPNGFilePath)
         # print('h',height,'w',width,'d',depth)
         # print("raw",array.shape)
-        array = self.reshapeArray(array,(height,width,depth))
+        array = self.reshapeArray(array, (height, width, depth))
         # print(array.shape)
 
         image = Image.new("RGBA", (height, width))
