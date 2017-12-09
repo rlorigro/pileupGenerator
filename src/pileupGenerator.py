@@ -17,7 +17,7 @@ bits. It creates a large binary sparse matrix too.
 
 allVariantRecord = {}
 # subregion = ':142535300-142535600'
-subregion = ':100000-200000'
+subregion = ''
 # subregion = ''
 cutoffOutput = False
 cutoff = 350
