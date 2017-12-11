@@ -17,7 +17,7 @@ output_dir=$output_dir'run-'$now
 mkdir $output_dir
 echo $output_dir
 mkdir tmp
-chrs=(1 2 3 4 5)
+chrs=(1)
 # chrs=(3)
 for i in ${chrs[@]};
     do
