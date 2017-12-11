@@ -320,25 +320,25 @@ if __name__ == '__main__':
     parser.add_argument(
         "--window_size",
         type=int,
-        default=100,
+        default=10,
         help="Window size of query region."
     )
     parser.add_argument(
         "--window_cutoff",
         type=int,
-        default=70,
+        default=30,
         help="Size of output image."
     )
     parser.add_argument(
         "--coverage",
         type=int,
-        default=280,
+        default=180,
         help="Read coverage, default is 50x."
     )
     parser.add_argument(
         "--coverage_cutoff",
         type=int,
-        default=300,
+        default=200,
         help="Size of output image."
     )
     parser.add_argument(
