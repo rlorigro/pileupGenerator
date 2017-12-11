@@ -193,8 +193,6 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
             else:
                 prev_start = start
                 prev_end = end
-            print(rec)
-            exit()
             labelString, insertLengths, insertGenotypes, deleteLengths, deleteGenotypes, mismatches = getLabel(start, end)
 
             filename = output_dir + rec.chrom + "_" + str(rec.pos)
