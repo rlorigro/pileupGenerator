@@ -88,6 +88,20 @@ class Pileup:
         self.relativeIndex = None
         self.relativeIndexRef = None
 
+    def generateRGBtoSNP(self):
+        '''
+        Generate inverse of SNPtoRGB automatically, from any SNPtoRGB dictionary
+        :return:
+        '''
+
+        self.RGBtoSNP = [[[None for i in range(2)] for j in range(2)] for k in range(2)]
+
+        for item in self.SNPtoRGB.items():
+            bits = [int(i/255) for i in item[1]]
+
+            i1,i2,i3 = bits
+            self.RGBtoSNP[i1][i2][i3] = item[0]
+
 
     def addPileupEntry(self,i,pileupEncoding,quality):
         if i not in self.pileupColumns:
@@ -137,21 +151,6 @@ class Pileup:
             return 'M'
         else:
             return readCharacter
-
-
-    def generateRGBtoSNP(self):
-        '''
-        Generate inverse of SNPtoRGB automatically, from any SNPtoRGB dictionary
-        :return:
-        '''
-
-        self.RGBtoSNP = [[[None for i in range(2)] for j in range(2)] for k in range(2)]
-
-        for item in self.SNPtoRGB.items():
-            bits = [int(i/255) for i in item[1]]
-
-            i1,i2,i3 = bits
-            self.RGBtoSNP[i1][i2][i3] = item[0]
 
 
     def iterateReads(self):
