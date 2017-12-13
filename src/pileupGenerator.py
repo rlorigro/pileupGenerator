@@ -16,9 +16,9 @@ bits. It creates a large binary sparse matrix too.
 """
 
 allVariantRecord = {}
-# subregion = ':142535300-142535600'
+# subregion = ':662800-663000'
+# subregion = ':100000-120000'
 subregion = ''
-# subregion = ''
 cutoffOutput = False
 cutoff = 350
 
@@ -158,13 +158,21 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     cnt = 0
     start_timer = timer()
     populateRecordDictionary(vcf_region, vcfFile)
-    smry = open(output_dir + "summary" + '_' + vcf_region + vcf_subregion + ".csv", 'w')
-    smry_ref_pos_file = open(output_dir + "ref_positions_" + vcf_region + vcf_subregion + ".csv", 'w')
+
+    if vcf_subregion[0] == ':':
+        vcf_subregion_filename = '_' + vcf_subregion[1:]
+    else:
+        vcf_subregion_filename = vcf_subregion
+
+    smry = open(output_dir + "summary" + '_' + vcf_region + vcf_subregion_filename + ".csv", 'w')
+    smry_ref_pos_file = open(output_dir + "ref_positions_" + vcf_region + vcf_subregion_filename + ".csv", 'w')
     smry_ref_pos_file_writer = csv.writer(smry_ref_pos_file)
+
     try:
         os.stat("tmp/")
     except:
         os.mkdir("tmp/")
+
     log = open("tmp/" + "log_" + vcf_region + vcf_subregion + ".txt", 'w')
     files.append(smry)
     files.append(log)
@@ -368,31 +376,32 @@ if __name__ == '__main__':
     if FLAGS.window_size * 2 + 1 > FLAGS.window_cutoff:
         sys.stderr.write("ERROR: WINDOW CUTOFF TOO SMALL. MINUMUM SUPPORTED WINDOW SIZE: {2*WINDOW_SIZE + 1}\n")
         exit()
-    parallel_pileup_generator(FLAGS.vcf_region,
-                              FLAGS.bam,
-                              FLAGS.ref,
-                              FLAGS.vcf,
-                              FLAGS.output_dir,
-                              FLAGS.window_size,
-                              FLAGS.window_cutoff,
-                              FLAGS.coverage_cutoff,
-                              FLAGS.map_quality_cutoff,
-                              FLAGS.vcf_quality_cutoff,
-                              FLAGS.max_threads,
-                              FLAGS.coverage_threshold)
 
-    # generatePileupBasedonVCF(FLAGS.vcf_region,
-    #                          subregion,
-    #                          FLAGS.bam,
-    #                          FLAGS.ref,
-    #                          FLAGS.vcf,
-    #                          FLAGS.output_dir,
-    #                          FLAGS.window_size,
-    #                          FLAGS.window_cutoff,
-    #                          FLAGS.coverage_cutoff,
-    #                          FLAGS.map_quality_cutoff,
-    #                          FLAGS.vcf_quality_cutoff,
-    #                          FLAGS.coverage_threshold)
+    # parallel_pileup_generator(FLAGS.vcf_region,
+    #                           FLAGS.bam,
+    #                           FLAGS.ref,
+    #                           FLAGS.vcf,
+    #                           FLAGS.output_dir,
+    #                           FLAGS.window_size,
+    #                           FLAGS.window_cutoff,
+    #                           FLAGS.coverage_cutoff,
+    #                           FLAGS.map_quality_cutoff,
+    #                           FLAGS.vcf_quality_cutoff,
+    #                           FLAGS.max_threads,
+    #                           FLAGS.coverage_threshold)
+
+    generatePileupBasedonVCF(FLAGS.vcf_region,
+                             subregion,
+                             FLAGS.bam,
+                             FLAGS.ref,
+                             FLAGS.vcf,
+                             FLAGS.output_dir,
+                             FLAGS.window_size,
+                             FLAGS.window_cutoff,
+                             FLAGS.coverage_cutoff,
+                             FLAGS.map_quality_cutoff,
+                             FLAGS.vcf_quality_cutoff,
+                             FLAGS.coverage_threshold)
 
 
 # example usage:

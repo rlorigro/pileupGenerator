@@ -57,22 +57,21 @@ class Pileup:
         self.noneChar = '_'       # character to use for empty positions in the text pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
 
-        self.SNPtoRGB = {'M': [1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],
-                         'A': [0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],
-                         'C': [0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0],
-                         'G': [0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0],
-                         'T': [0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0],
-                        'MM': [0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0],
-                         'I': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0],
-                         'D': [0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],
-                         'N': [0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],  # redundant in case of read containing 'N'... should this be independent?
-               self.noneChar: [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0]}
+        self.SNPtoRGB = {'M': [1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],  # Match channel, 1=mismatch 0=match
+                         'A': [0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0],
+                         'C': [0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0],
+                         'G': [0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0],
+                         'T': [0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0],
+                         'I': [0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0],
+                         'D': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],
+                         'N': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],  # redundant in case of read containing 'N'... should this be independent?
+               self.noneChar: [0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0]}
 
-        self.emptyChannelVector = [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
+        self.emptyChannelVector = [0.0 for i in range(len(self.SNPtoRGB['M']))]
 
         self.channelKey = {key:value.index(1.0) for key, value in self.SNPtoRGB.items()}
 
-        self.decodeMap = ['M', 'A', 'C', 'G', 'T', 'MM', self.insertChar, 'D', self.noneChar]
+        self.decodeMap = ['M', 'A', 'C', 'G', 'T', self.insertChar, 'D', self.noneChar]
         self.decodeIndex = list(range(len(self.decodeMap)))
 
         self.noneAlpha = [1]
@@ -156,13 +155,10 @@ class Pileup:
                 nt = self.readSequence[self.readPosition]
                 ntRef = self.refSequence[self.relativeIndexRef]
 
-                if nt != ntRef:
-                    if nt != 'N':
-                        encoding = list(self.SNPtoRGB['MM'])  # Mismatch (specify the alt)
-                    else:
-                        encoding = list(self.emptyChannelVector)
+                if nt != ntRef and nt != 'N':     #mismatch AND NOT A SEQUENCING ERROR
+                    encoding = list(self.SNPtoRGB['M'])         # Mismatch (specify the alt)
                 else:
-                    encoding = list(self.SNPtoRGB['M'])
+                    encoding = list(self.emptyChannelVector)
 
                 ntChannel = self.channelKey[nt]
 

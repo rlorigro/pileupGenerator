@@ -9,10 +9,15 @@ class Decoder:
         self.summaryFile = summaryFilename
         self.localPath = localPath
 
-        # matches
-        self.decodeToSNPMap = ['M', 'A', 'C', 'G', 'T', 'MM', 'I', 'D', '_']
-        self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', 'MM', '-', 'D', '_']
+        # matches and mismatches
+        self.decodeToSNPMap = ['M', 'A', 'C', 'G', 'T', 'I', 'D', '_']
+        self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', '-', 'D', '_']
         self.decodeIndex = list(range(len(self.decodeToTextMap)))
+
+        # matches and mismatches
+        # self.decodeToSNPMap = ['M', 'A', 'C', 'G', 'T', 'MM', 'I', 'D', '_']
+        # self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', 'MM', '-', 'D', '_']
+        # self.decodeIndex = list(range(len(self.decodeToTextMap)))
 
         # no matches
         # self.decodeToSNPMap = ['A', 'C', 'G', 'T', 'I', 'D', '_']
@@ -138,7 +143,10 @@ class Decoder:
                 # print("q",quality)
                 # print(numpy.where(channels==255)[0])
 
-                decodeIndex = numpy.where(channels==255)[0][0]
+                decodeIndex = 1+numpy.where(channels[1:] == 255)[0][0]
+
+                if 1 <= decodeIndex <= 4 and channels[0] == 0 and h!=0:
+                    decodeIndex = 0
 
                 # print(decodeIndex)
 
@@ -162,12 +170,13 @@ class Decoder:
         image = Image.new("RGBA", (height, width))
         pixels = image.load()
 
-
         for w in range(width):
             for h in range(height):
                 channels = array[w,h,:-1]
                 quality = array[w,h,depth-1]     # q is always last channel
+
                 decodeIndex = int(numpy.sum(channels*self.decodeIndex))
+
                 snp = self.decodeToSNPMap[decodeIndex]
 
                 rgb = self.SNPtoRGB[snp]
@@ -251,3 +260,7 @@ if __name__ == '__main__':
     decoder = Decoder(FLAGS.input_file, FLAGS.output_dir)
 
     decoder.convertFlattenedPNGsToPNG(FLAGS.output_dir)
+
+
+#example usage:
+# python3 MultiDecoder.py --input_file /Users/saureous/data/test
