@@ -143,18 +143,18 @@ class Decoder:
                 # print("q",quality)
                 # print(numpy.where(channels==255)[0])
 
-                decodeIndex = 1+numpy.where(channels[1:] == 255)[0][0]
+                if numpy.sum(channels) == 0:
+                    decodeIndex = len(self.decodeToSNPMap)-1
+                else:
+                    decodeIndex = 1+numpy.where(channels[1:] == 255)[0][0]
 
                 if 1 <= decodeIndex <= 4 and channels[0] == 0 and h!=0:
                     decodeIndex = 0
-
-                # print(decodeIndex)
 
                 snp = self.decodeToSNPMap[decodeIndex]
 
                 rgb = self.SNPtoRGB[snp]
                 rgba = rgb+[quality]
-                # print(quality)
                 rgba = tuple(map(int, rgba))
                 pixels[h, w] = rgba
 

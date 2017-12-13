@@ -377,31 +377,31 @@ if __name__ == '__main__':
         sys.stderr.write("ERROR: WINDOW CUTOFF TOO SMALL. MINUMUM SUPPORTED WINDOW SIZE: {2*WINDOW_SIZE + 1}\n")
         exit()
 
-    # parallel_pileup_generator(FLAGS.vcf_region,
-    #                           FLAGS.bam,
-    #                           FLAGS.ref,
-    #                           FLAGS.vcf,
-    #                           FLAGS.output_dir,
-    #                           FLAGS.window_size,
-    #                           FLAGS.window_cutoff,
-    #                           FLAGS.coverage_cutoff,
-    #                           FLAGS.map_quality_cutoff,
-    #                           FLAGS.vcf_quality_cutoff,
-    #                           FLAGS.max_threads,
-    #                           FLAGS.coverage_threshold)
+    parallel_pileup_generator(FLAGS.vcf_region,
+                              FLAGS.bam,
+                              FLAGS.ref,
+                              FLAGS.vcf,
+                              FLAGS.output_dir,
+                              FLAGS.window_size,
+                              FLAGS.window_cutoff,
+                              FLAGS.coverage_cutoff,
+                              FLAGS.map_quality_cutoff,
+                              FLAGS.vcf_quality_cutoff,
+                              FLAGS.max_threads,
+                              FLAGS.coverage_threshold)
 
-    generatePileupBasedonVCF(FLAGS.vcf_region,
-                             subregion,
-                             FLAGS.bam,
-                             FLAGS.ref,
-                             FLAGS.vcf,
-                             FLAGS.output_dir,
-                             FLAGS.window_size,
-                             FLAGS.window_cutoff,
-                             FLAGS.coverage_cutoff,
-                             FLAGS.map_quality_cutoff,
-                             FLAGS.vcf_quality_cutoff,
-                             FLAGS.coverage_threshold)
+    # generatePileupBasedonVCF(FLAGS.vcf_region,
+    #                          subregion,
+    #                          FLAGS.bam,
+    #                          FLAGS.ref,
+    #                          FLAGS.vcf,
+    #                          FLAGS.output_dir,
+    #                          FLAGS.window_size,
+    #                          FLAGS.window_cutoff,
+    #                          FLAGS.coverage_cutoff,
+    #                          FLAGS.map_quality_cutoff,
+    #                          FLAGS.vcf_quality_cutoff,
+    #                          FLAGS.coverage_threshold)
 
 
 # example usage:

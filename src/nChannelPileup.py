@@ -57,19 +57,21 @@ class Pileup:
         self.noneChar = '_'       # character to use for empty positions in the text pileup
         self.noneLabel = '0'      # character to use for (non variant called) inserts in the label
 
-        self.SNPtoRGB = {'M': [1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],  # Match channel, 1=mismatch 0=match
-                         'A': [0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0],
-                         'C': [0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0],
-                         'G': [0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0],
-                         'T': [0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0],
-                         'I': [0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0],
-                         'D': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],
-                         'N': [0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0],  # redundant in case of read containing 'N'... should this be independent?
-               self.noneChar: [0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0]}
+        self.SNPtoRGB = {'M': [1.0,0.0,0.0,0.0,0.0,0.0,0.0],  # Match channel, 1=mismatch 0=match
+                         'A': [0.0,1.0,0.0,0.0,0.0,0.0,0.0],
+                         'C': [0.0,0.0,1.0,0.0,0.0,0.0,0.0],
+                         'G': [0.0,0.0,0.0,1.0,0.0,0.0,0.0],
+                         'T': [0.0,0.0,0.0,0.0,1.0,0.0,0.0],
+                         'I': [0.0,0.0,0.0,0.0,0.0,1.0,0.0],
+                         'D': [0.0,0.0,0.0,0.0,0.0,0.0,1.0],
+                         'N': [0.0,0.0,0.0,0.0,0.0,0.0,1.0],  # redundant in case of read containing 'N'... should this be independent?
+               self.noneChar: [0.0,0.0,0.0,0.0,0.0,0.0,0.0]}
+
+        # print(sam.count(contig="chr"+self.chromosome, start=self.queryStart, end=self.queryStart+1))
 
         self.emptyChannelVector = [0.0 for i in range(len(self.SNPtoRGB['M']))]
 
-        self.channelKey = {key:value.index(1.0) for key, value in self.SNPtoRGB.items()}
+        self.channelKey = {key:value.index(1.0) for key, value in self.SNPtoRGB.items() if key != self.noneChar}
 
         self.decodeMap = ['M', 'A', 'C', 'G', 'T', self.insertChar, 'D', self.noneChar]
         self.decodeIndex = list(range(len(self.decodeMap)))
@@ -234,7 +236,9 @@ class Pileup:
         '''
 
         pileupIteratorIndex = 0
+
         for r, read in enumerate(self.localReads):
+            # print(read.mapping_quality,self.mapQualityCutoff)
             if read.mapping_quality < self.mapQualityCutoff:
                 continue
             self.parseRead(pileupIteratorIndex, read)
