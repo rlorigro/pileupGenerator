@@ -21,7 +21,7 @@ class Pileup:
     position, using the pysam and pyfaidx object provided by PileupGenerator
     '''
 
-    def __init__(self,sam,fasta,chromosome,queryStart,flankLength,outputFilename,label,insertLengths,insertGenotypes,deleteLengths,deleteGenotypes,coverageCutoff,mapQualityCutoff,windowCutoff,coverageThreshold):
+    def __init__(self,sam,fasta,chromosome,queryStart,flankLength,outputFilename,label,insertLengths,insertGenotypes,deleteLengths,deleteGenotypes,coverageCutoff,mapQualityCutoff,windowCutoff,coverageThreshold,mismatches):
         self.length = flankLength*2+1
         self.label = label
         self.insertLengths = insertLengths
@@ -399,9 +399,16 @@ class Pileup:
         for c in range(len(self.inserts[i])):
             for r in range(self.coverageCutoff+1):
                 prevEntry = self.pileupImage[r][i-1][:-1]   # exclude quality
-                prevEntry = self.decodeMap[prevEntry.index(1)]
-                insertEntry = self.inserts[i][c][r][:-1]    # exclude quality
-                insertEntry = self.decodeMap[insertEntry.index(1)]
+
+                try:
+                    index = prevEntry.index(1)
+                except(ValueError):
+                    index = len(self.decodeMap) - 1
+
+                prevEntry = self.decodeMap[index]
+
+                # insertEntry = self.inserts[i][c][r][:-1]    # exclude quality
+                # insertEntry = self.decodeMap[insertEntry.index(1)]
 
                 # print(i,r,prevEntry,insertEntry)
                 if prevEntry == self.noneChar: # and insertEntry not in charSet:  # previous entry decodes to None character AND insert entry is not a true sequence
@@ -547,7 +554,20 @@ class PileUpGenerator:
         self.sam = pysam.AlignmentFile(alignmentFile,"rb")
         self.fasta = Fasta(referenceFile,as_raw=True,sequence_always_upper=True)
 
-    def generatePileup(self,chromosome,position,flankLength,outputFilename,label,insertLengths,insertGenotypes,deleteLengths,deleteGenotypes,coverageCutoff,mapQualityCutoff,windowCutoff,coverageThreshold):
+    def generatePileup(self,chromosome,
+                       position,
+                       flankLength,
+                       outputFilename,
+                       label,
+                       insertLengths,
+                       insertGenotypes,
+                       deleteLengths,
+                       deleteGenotypes,
+                       coverageCutoff,
+                       mapQualityCutoff,
+                       windowCutoff,
+                       coverageThreshold,
+                       mismatches):
         '''
         Generate a pileup at a given position
         :param queryStart:
@@ -575,7 +595,8 @@ class PileUpGenerator:
                         windowCutoff=windowCutoff,
                         coverageCutoff=coverageCutoff,
                         mapQualityCutoff=mapQualityCutoff,
-                        coverageThreshold=coverageThreshold)
+                        coverageThreshold=coverageThreshold,
+                        mismatches=mismatches)
 
 
         # print(datetime.now() - startTime, "initialized")

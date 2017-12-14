@@ -14,6 +14,8 @@ class Decoder:
         self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', '-', 'D', '_']
         self.decodeIndex = list(range(len(self.decodeToTextMap)))
 
+        self.ntMaskArray = numpy.array([0,0,0,0,0,1,1])
+
         # matches and mismatches
         # self.decodeToSNPMap = ['M', 'A', 'C', 'G', 'T', 'MM', 'I', 'D', '_']
         # self.decodeToTextMap = ['.', 'A', 'C', 'G', 'T', 'MM', '-', 'D', '_']
@@ -69,7 +71,7 @@ class Decoder:
                     # pngPath = self.localPath + pngFilename
 
                 if os.path.exists(png_path):
-                    self.convertFlattenedPNGToRGBA(png_path, output_dir, h, w, d)
+                    self.convertFlattenedPNGToRGBA(png_path, output_dir, h, w, d, label)
                 else:
                     print("WARNING file not found: ",png_path)
                     pass
@@ -120,7 +122,7 @@ class Decoder:
         code = self.RGBtoText[i1][i2][i3]
         return self.sortingKey[code]
 
-    def convertFlattenedPNGToRGBA(self, inputPNGFilePath, output_directory, height, width, depth):
+    def convertFlattenedPNGToRGBA(self, inputPNGFilePath, output_directory, height, width, depth, label):
         array = numpy.asarray(Image.open(inputPNGFilePath))
 
         # array = numpy.array(image.getdata()) #.reshape(h,w*d)
@@ -148,7 +150,7 @@ class Decoder:
                 else:
                     decodeIndex = 1+numpy.where(channels[1:] == 255)[0][0]
 
-                if 1 <= decodeIndex <= 4 and channels[0] == 0 and h!=0:
+                if 1 <= decodeIndex <= 4 and numpy.sum(channels*self.ntMaskArray)==0 and channels[0]==0 and h!=0:
                     decodeIndex = 0
 
                 snp = self.decodeToSNPMap[decodeIndex]
@@ -160,6 +162,13 @@ class Decoder:
 
         png_file_name = inputPNGFilePath.split('/')[-1].split('.')[0]+"_decoded.png"
         image.save(output_directory + png_file_name, "PNG")
+
+        # ---------- Print decoded text ----------
+        print(png_file_name)
+        pileupText = self.decodeRGB(output_directory+png_file_name)
+        for r, row in enumerate(pileupText):
+            print(label[r], row)
+        # ----------------------------------------
 
 
     def convertArrayToRGBA(self,npyFilePath):

@@ -17,7 +17,8 @@ bits. It creates a large binary sparse matrix too.
 
 allVariantRecord = {}
 # subregion = ':662800-663000'
-# subregion = ':100000-120000'
+# subregion = ':176000-177000'
+# subregion = ':100000-200000'
 subregion = ''
 cutoffOutput = False
 cutoff = 350
@@ -94,10 +95,12 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
             if longestLength == refLength or shortestLength == refLength:   # SNP is here
                 isMismatch = True
 
+            if rec.start in allVariantRecord:
+                isMismatch = allVariantRecord[rec.start][3]
+
             if not isMismatch and (insertLength is not None or deleteLength is not None):
                 uncorrectedGenotypeClass = genotypeClass
                 genotypeClass = 1
-
             else:
                 uncorrectedGenotypeClass = genotypeClass
 
@@ -217,7 +220,8 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
                                                                                      insertGenotypes=insertGenotypes,
                                                                                      deleteLengths=deleteLengths,
                                                                                      deleteGenotypes=deleteGenotypes,
-                                                                                     coverageThreshold=coverage_threshold
+                                                                                     coverageThreshold=coverage_threshold,
+                                                                                     mismatches=mismatches
                                                                                      )
 
             # print(filename)
