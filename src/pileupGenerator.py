@@ -19,6 +19,7 @@ allVariantRecord = {}
 # subregion = ':662800-663000'
 # subregion = ':176000-177000'
 # subregion = ':100000-200000'
+# subregion = ':101035000-101037000'
 subregion = ''
 cutoffOutput = False
 cutoff = 350
@@ -53,6 +54,7 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
             insertLength = None
             deleteLength = None
             isMismatch = False
+            isDelete = False
 
             altAlleles = [alleles[int(gt)] for gt in gtField if gt!='0']
 
@@ -92,11 +94,24 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
                 elif longestLength < refLength:
                     deleteLength = refLength - longestLength
 
-            if longestLength == refLength or shortestLength == refLength:   # SNP is here
-                isMismatch = True
-
             if rec.start in allVariantRecord:
-                isMismatch = allVariantRecord[rec.start][3]
+                if allVariantRecord[rec.start][3] == True:  # overwrite only if preexisting entry is True
+                    isMismatch = True
+                if allVariantRecord[rec.start][2] == True:
+                    isDelete = True
+
+            if deleteLength is not None:
+                offset = refLength - deleteLength
+                for i in range(offset,offset+deleteLength):     # starting after the reference sequence ends, label as delete
+                    if rec.start+i in allVariantRecord:                   # if there is a preexisting record, only overwrite isDelete
+                        record = allVariantRecord[rec.start+i]
+                        record[2] = True
+                        allVariantRecord[rec.start+i] = record
+                    else:                                       # if no preexisting record, write new record
+                        allVariantRecord[rec.start+i] = (genotypeClass, 0, True, False, genotypeClass)
+
+            if longestLength == refLength or shortestLength == refLength:   # SNP (mismatch) is here
+                isMismatch = True
 
             if not isMismatch and (insertLength is not None or deleteLength is not None):
                 uncorrectedGenotypeClass = genotypeClass
@@ -104,13 +119,15 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
             else:
                 uncorrectedGenotypeClass = genotypeClass
 
-            allVariantRecord[rec.start] = (genotypeClass, insertLength, deleteLength, isMismatch, uncorrectedGenotypeClass)
+            # print(rec.start,isDelete)
+
+            allVariantRecord[rec.start] = (genotypeClass, insertLength, isDelete, isMismatch, uncorrectedGenotypeClass)    # del will never be True at the anchor position
 
 
 def getLabel(start, end):
     labelStr = ''              # draft of the labelling string, assuming no inserts
     insertLengths = dict()     # stores length of longest variant for labelling of inserts during pileup generation
-    deleteLengths = dict()
+    deletes = set()
     deleteGenotypes = dict()
     insertGenotypes = dict()
     mismatches = set()
@@ -124,15 +141,15 @@ def getLabel(start, end):
             if allVariantRecord[i][1] is not None:
                 insertLengths[j] = int(allVariantRecord[i][1])
                 insertGenotypes[j] = uncorrectedGenotypeClass
-            if allVariantRecord[i][2] is not None:
-                deleteLengths[j] = int(allVariantRecord[i][2])
+            if allVariantRecord[i][2] == True:
+                deletes.add(j)
                 deleteGenotypes[j] = uncorrectedGenotypeClass
             if allVariantRecord[i][3] == True:
                 mismatches.add(j)
 
         else:
             labelStr += str(1)  # hom
-    return labelStr, insertLengths, insertGenotypes, deleteLengths, deleteGenotypes, mismatches
+    return labelStr, insertLengths, insertGenotypes, deletes, deleteGenotypes, mismatches
 
 
 # def removeAnchorLabels(refStart,refPositions,label,mismatches,inserts,deletes):

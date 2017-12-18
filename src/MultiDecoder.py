@@ -154,10 +154,11 @@ class Decoder:
                     decodeIndex = 0
 
                 snp = self.decodeToSNPMap[decodeIndex]
-
                 rgb = self.SNPtoRGB[snp]
+
                 rgba = rgb+[quality]
                 rgba = tuple(map(int, rgba))
+
                 pixels[h, w] = rgba
 
         png_file_name = inputPNGFilePath.split('/')[-1].split('.')[0]+"_decoded.png"

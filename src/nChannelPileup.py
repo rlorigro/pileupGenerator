@@ -434,16 +434,16 @@ class Pileup:
 
         pileupArray = [[None for m in range(self.windowCutoff)] for n in range(self.coverageCutoff)]
 
+        # print(self.deleteLengths)
+
         image_iterator = 0
         i = 0
         while image_iterator < self.windowCutoff:
             if i in self.deleteLengths:                     # update delete labels
                 # label = self.label[image_iterator]
                 label = self.deleteGenotypes[i]
-                length = self.deleteLengths[i]
 
-                for c in range(1, length+1):
-                    self.label = self.label[:image_iterator+c] + label + self.label[image_iterator+c+1:]
+                self.label = self.label[:image_iterator] + label + self.label[image_iterator+1:]
 
             if i in self.inserts:
                 insert_rows = self.inserts[i]
