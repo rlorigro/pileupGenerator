@@ -18,8 +18,8 @@ bits. It creates a large binary sparse matrix too.
 allVariantRecord = {}
 # subregion = ':662800-663000'
 # subregion = ':176000-177000'
-# subregion = ':100000-200000'
-# subregion = ':101035000-101037000'
+# subregion = ':1-200000'
+# subregion = ':180310000-180340000'
 subregion = ''
 cutoffOutput = False
 cutoff = 350
@@ -108,7 +108,7 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
                         record[2] = True
                         allVariantRecord[rec.start+i] = record
                     else:                                       # if no preexisting record, write new record
-                        allVariantRecord[rec.start+i] = (genotypeClass, 0, True, False, genotypeClass)
+                        allVariantRecord[rec.start+i] = [genotypeClass, 0, True, False, genotypeClass]
 
             if longestLength == refLength or shortestLength == refLength:   # SNP (mismatch) is here
                 isMismatch = True
@@ -121,7 +121,7 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
 
             # print(rec.start,isDelete)
 
-            allVariantRecord[rec.start] = (genotypeClass, insertLength, isDelete, isMismatch, uncorrectedGenotypeClass)    # del will never be True at the anchor position
+            allVariantRecord[rec.start] = [genotypeClass, insertLength, isDelete, isMismatch, uncorrectedGenotypeClass]    # del will never be True at the anchor position
 
 
 def getLabel(start, end):
