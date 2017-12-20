@@ -17,7 +17,7 @@ bits. It creates a large binary sparse matrix too.
 
 allVariantRecord = {}
 # subregion = ':662800-663000'
-# subregion = ':176000-177000'
+# subregion = ':725000-725300'
 # subregion = ':1-200000'
 # subregion = ':180310000-180340000'
 subregion = ''
@@ -43,6 +43,8 @@ def getGTField(rec):
 
 def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
     vcf_in = VariantFile(vcfFile)
+    # dictionaryKeys = ["genotypeClass","InsertLength","isDelete","isMismatch","uncorrectedGenotypeClass"]
+
     for rec in vcf_in.fetch(region="chr"+vcf_region+subregion):
         gtField = getGTField(rec)   # genotype according to the vcf
         genotypeClass = getClassForGenotype(gtField)
@@ -102,8 +104,8 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
 
             if deleteLength is not None:
                 offset = refLength - deleteLength
-                for i in range(offset,offset+deleteLength):     # starting after the reference sequence ends, label as delete
-                    if rec.start+i in allVariantRecord:                   # if there is a preexisting record, only overwrite isDelete
+                for i in range(offset,offset+deleteLength):         # starting after the reference sequence ends, label as delete
+                    if rec.start+i in allVariantRecord:             # if there is a preexisting record, only overwrite isDelete
                         record = allVariantRecord[rec.start+i]
                         record[2] = True
                         allVariantRecord[rec.start+i] = record
@@ -119,7 +121,7 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
             else:
                 uncorrectedGenotypeClass = genotypeClass
 
-            # print(rec.start,isDelete)
+            print(rec.start,rec.pos,isDelete,isMismatch)
 
             allVariantRecord[rec.start] = [genotypeClass, insertLength, isDelete, isMismatch, uncorrectedGenotypeClass]    # del will never be True at the anchor position
 
@@ -173,7 +175,7 @@ def getLabel(start, end):
 
 
 def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff,
-                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, coverage_threshold):
+                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, coverage_threshold, vcfFileConfident=None):
     files = list()
     cnt = 0
     start_timer = timer()
@@ -209,18 +211,26 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     log.write("Map quality cutoff: \t%s\n" % map_quality_cutoff)
     log.write("Coverage threshold: \t%s\n" % coverage_threshold)
 
-    p = SamPileupBMP.PileUpGenerator(bamFile, refFile) #, smry_ref_pos_file_writer)
+    p = SamPileupBMP.PileUpGenerator(bamFile, refFile)  #, smry_ref_pos_file_writer)
     prev_start = None
     prev_end = None
-    for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region+vcf_subregion):
+
+    if vcfFileConfident is not None:
+        variant_sites = VariantFile(vcfFileConfident).fetch(region="chr"+vcf_region+vcf_subregion)
+    else:
+        variant_sites = VariantFile(vcfFile).fetch(region="chr"+vcf_region+vcf_subregion)
+
+    for rec in variant_sites:
         if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
             start = rec.pos - window_size - 1
             end = rec.pos + window_size
+
             if prev_start is not None and prev_end is not None and rec.pos < prev_end - 10:
                 continue
             else:
                 prev_start = start
                 prev_end = end
+
             labelString, insertLengths, insertGenotypes, deleteLengths, deleteGenotypes, mismatches = getLabel(start, end)
 
             filename = output_dir + rec.chrom + "_" + str(rec.pos)
@@ -284,8 +294,9 @@ def chunkIt(seq, num):
 
 
 def parallel_pileup_generator(vcf_region, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff,
-                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, threads, coverage_threshold):
+                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, threads, coverage_threshold,vcfFileConfident=None):
     all_positions = []
+
     for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region):
         if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
             all_positions.append(rec.pos)
@@ -300,7 +311,7 @@ def parallel_pileup_generator(vcf_region, bamFile, refFile, vcfFile, output_dir,
         vcf_subregion = "-"+str(starts[i])+"-"+str(ends[i])
         p = Process(target=generatePileupBasedonVCF, args=(vcf_region, vcf_subregion, bamFile, refFile, vcfFile,
                                                            output_dir, window_size, window_cutoff, coverage_cutoff,
-                                                           map_quality_cutoff, vcf_quality_cutoff,coverage_threshold,))
+                                                           map_quality_cutoff, vcf_quality_cutoff,coverage_threshold,vcfFileConfident))
         p.start()
 
 if __name__ == '__main__':
@@ -324,8 +335,15 @@ if __name__ == '__main__':
     parser.add_argument(
         "--vcf",
         type=str,
-        required=False,
+        required=True,
         help="VCF file containing SNPs and SVs."
+    )
+    parser.add_argument(
+        "--vcf_confident",
+        type=str,
+        required=False,
+        help="Confident VCF file containing SNPs and SVs. If provided, pileups will only be generated at sites from this \
+             file. Non-confident sites may be found and labelled within the window of confident sites, however."
     )
     parser.add_argument(
         "--region",
@@ -378,7 +396,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--vcf_quality_cutoff",
         type=int,
-        default=60,
+        default=20,
         help="Phred scaled threshold for variant call quality."
     )
     parser.add_argument(
@@ -387,6 +405,12 @@ if __name__ == '__main__':
         default=5,
         help="Threshold below which to remove training label from pileup"
     )
+    # parser.add_argument(
+    #     "--parallel",
+    #     type=bool,
+    #     default=False,
+    #     help="Option to run threaded pileup generator"
+    # )
     parser.add_argument(
         "--max_threads",
         type=int,
@@ -395,35 +419,39 @@ if __name__ == '__main__':
     )
     FLAGS, unparsed = parser.parse_known_args()
     if FLAGS.window_size * 2 + 1 > FLAGS.window_cutoff:
-        sys.stderr.write("ERROR: WINDOW CUTOFF TOO SMALL. MINUMUM SUPPORTED WINDOW SIZE: {2*WINDOW_SIZE + 1}\n")
+        sys.stderr.write("ERROR: WINDOW CUTOFF TOO SMALL. MINIMUM SUPPORTED WINDOW SIZE: {2*WINDOW_SIZE + 1}\n")
         exit()
 
-    parallel_pileup_generator(FLAGS.vcf_region,
-                              FLAGS.bam,
-                              FLAGS.ref,
-                              FLAGS.vcf,
-                              FLAGS.output_dir,
-                              FLAGS.window_size,
-                              FLAGS.window_cutoff,
-                              FLAGS.coverage_cutoff,
-                              FLAGS.map_quality_cutoff,
-                              FLAGS.vcf_quality_cutoff,
-                              FLAGS.max_threads,
-                              FLAGS.coverage_threshold)
+    # if FLAGS.parallel == True:
+    parallel_pileup_generator(vcf_region=FLAGS.vcf_region,
+                            bamFile = FLAGS.bam,
+                            refFile = FLAGS.ref,
+                            vcfFile = FLAGS.vcf,
+                            vcfFileConfident = FLAGS.vcf_confident,
+                            output_dir = FLAGS.output_dir,
+                            window_size = FLAGS.window_size,
+                            window_cutoff = FLAGS.window_cutoff,
+                            coverage_cutoff = FLAGS.coverage_cutoff,
+                            map_quality_cutoff = FLAGS.map_quality_cutoff,
+                            vcf_quality_cutoff = FLAGS.vcf_quality_cutoff,
+                            coverage_threshold = FLAGS.coverage_threshold,
+                            threads = FLAGS.max_threads)
 
-    # generatePileupBasedonVCF(FLAGS.vcf_region,
-    #                          subregion,
-    #                          FLAGS.bam,
-    #                          FLAGS.ref,
-    #                          FLAGS.vcf,
-    #                          FLAGS.output_dir,
-    #                          FLAGS.window_size,
-    #                          FLAGS.window_cutoff,
-    #                          FLAGS.coverage_cutoff,
-    #                          FLAGS.map_quality_cutoff,
-    #                          FLAGS.vcf_quality_cutoff,
-    #                          FLAGS.coverage_threshold)
+    # else:
+    # generatePileupBasedonVCF(vcf_region=FLAGS.vcf_region,
+    #                          vcf_subregion=subregion,
+    #                          bamFile=FLAGS.bam,
+    #                          refFile=FLAGS.ref,
+    #                          vcfFile=FLAGS.vcf,
+    #                          vcfFileConfident=FLAGS.vcf_confident,
+    #                          output_dir=FLAGS.output_dir,
+    #                          window_size=FLAGS.window_size,
+    #                          window_cutoff=FLAGS.window_cutoff,
+    #                          coverage_cutoff=FLAGS.coverage_cutoff,
+    #                          map_quality_cutoff=FLAGS.map_quality_cutoff,
+    #                          vcf_quality_cutoff=FLAGS.vcf_quality_cutoff,
+    #                          coverage_threshold=FLAGS.coverage_threshold)
 
 
-# example usage:
+        # example usage:
 # python3 "src/pileupGenerator.py" --bam "data/chr3_200k.bam" --ref "data/chr3.fa" --vcf "data/NA12878_S1.genome.vcf.gz" --region "chr3" --vcf_region '3' --output_dir "data/errors/" --window_size 25 >data/out.txt
