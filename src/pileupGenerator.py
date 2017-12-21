@@ -453,5 +453,6 @@ if __name__ == '__main__':
     #                          coverage_threshold=FLAGS.coverage_threshold)
 
 
-        # example usage:
+# example usage:
 # python3 "src/pileupGenerator.py" --bam "data/chr3_200k.bam" --ref "data/chr3.fa" --vcf "data/NA12878_S1.genome.vcf.gz" --region "chr3" --vcf_region '3' --output_dir "data/errors/" --window_size 25 >data/out.txt
+# python3 "src/pileupGenerator.py" --bam "/Users/saureous/data/chr3_200k.bam" --ref "/Users/saureous/data/chr3.fa" --vcf "/Users/saureous/data/NA12878_S1.genome.vcf.gz" --region "chr3" --vcf_region '3' --output_dir "/Users/saureous/data/test/" --window_size 25 --window_cutoff 75 >/Users/saureous/data/test/out.txt
