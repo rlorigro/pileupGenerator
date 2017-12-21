@@ -423,6 +423,7 @@ if __name__ == '__main__':
         exit()
 
     # if FLAGS.parallel == True:
+
     parallel_pileup_generator(vcf_region=FLAGS.vcf_region,
                             bamFile = FLAGS.bam,
                             refFile = FLAGS.ref,
@@ -438,6 +439,7 @@ if __name__ == '__main__':
                             threads = FLAGS.max_threads)
 
     # else:
+    
     # generatePileupBasedonVCF(vcf_region=FLAGS.vcf_region,
     #                          vcf_subregion=subregion,
     #                          bamFile=FLAGS.bam,

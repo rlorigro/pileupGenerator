@@ -71,7 +71,15 @@ class Pileup:
 
         self.emptyChannelVector = [0.0 for i in range(len(self.SNPtoRGB['M']))]
 
-        self.channelKey = {key:value.index(1.0) for key, value in self.SNPtoRGB.items() if key != self.noneChar}
+        self.channelKey = {'M':0,
+                           'A':1,
+                           'C':2,
+                           'G':3,
+                           'T':4,
+                           'I':5,
+                           'D':6,
+                           'N':6,
+                 self.noneChar:None}
 
         self.decodeMap = ['M', 'A', 'C', 'G', 'T', self.insertChar, 'D', self.noneChar]
         self.decodeIndex = list(range(len(self.decodeMap)))
@@ -172,6 +180,8 @@ class Pileup:
                 encoding = list(self.SNPtoRGB['D'])
                 coverage = 1
 
+                encoding[self.channelKey['M']] = 1.0    # set mismatch channel to 1
+
             elif snp == 3:                                          # refskip
                 encoding = list(self.SNPtoRGB['N'])
                 coverage = 0
@@ -212,6 +222,8 @@ class Pileup:
             # print("r",r)
 
             encoding = list(self.SNPtoRGB[character])
+            encoding[self.channelKey['M']] = 1.0        # set mismatch channel to 1
+
             channelIndex = self.channelKey['I']
 
             # print(encoding,character)
@@ -324,7 +336,6 @@ class Pileup:
 
                                     if self.packMap[r] >= self.coverageCutoff:   # skip unmapped read if exceeds coverage
                                         return
-
 
                                 baseQuality = readQualities[self.readPosition]
 

@@ -148,7 +148,10 @@ class Decoder:
                 if numpy.sum(channels) == 0:
                     decodeIndex = len(self.decodeToSNPMap)-1
                 else:
+                    # try:
                     decodeIndex = 1+numpy.where(channels[1:] == 255)[0][0]
+                    # except:
+                    #     print(channels)
 
                 if 1 <= decodeIndex <= 4 and numpy.sum(channels*self.ntMaskArray)==0 and channels[0]==0 and h!=0:
                     decodeIndex = 0
