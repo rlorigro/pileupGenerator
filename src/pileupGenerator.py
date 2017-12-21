@@ -121,7 +121,7 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
             else:
                 uncorrectedGenotypeClass = genotypeClass
 
-            print(rec.start,rec.pos,isDelete,isMismatch)
+            # print(rec.start,rec.pos,isDelete,isMismatch)
 
             allVariantRecord[rec.start] = [genotypeClass, insertLength, isDelete, isMismatch, uncorrectedGenotypeClass]    # del will never be True at the anchor position
 
