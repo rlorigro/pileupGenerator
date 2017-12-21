@@ -2,7 +2,7 @@ from pysam import VariantFile
 from collections import defaultdict,Counter
 import sys
 
-confusion_sites_filename = "/Users/saureous/data/decoded_mismatch-short.txt"
+confusion_sites_filename = "/Users/saureous/data/decoded_mismatch-2.txt"
 vcf_filename = "/Users/saureous/data/NA12878_S1.genome.vcf.gz"
 vcf_confident_filename = "/Users/saureous/data/NA12878_S1_confident.genome.vcf.gz"
 
@@ -31,6 +31,7 @@ class ConfusionValidator:
                                   "in_confident",
                                   "in_all",
                                   "is_insert",
+                                  "column",
                                   "frequencies",
                                   "n_characters",
                                   "n_entries_all",
@@ -49,7 +50,7 @@ class ConfusionValidator:
         self.insert_char = '_'
 
 
-    def collect_data(self):
+    def collect_data(self,cutoff=None):
         '''
         Open the confusion data file and store all entries as a 3d dict.
 
@@ -116,6 +117,7 @@ class ConfusionValidator:
                     data[self.default_key_index["reference_char"]] = reference_char
                     data[self.default_key_index["reference_char_vcf"]] = reference_char_vcf_all
                     data[self.default_key_index["is_insert"]] = is_insert
+                    data[self.default_key_index["column"]] = column
                     data[self.default_key_index["in_all"]] = in_all
                     data[self.default_key_index["in_confident"]] = in_confident
                     data[self.default_key_index["n_entries_all"]] = n_entries_all
