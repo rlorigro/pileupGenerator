@@ -2,7 +2,7 @@ from pysam import VariantFile
 from collections import defaultdict,Counter
 import sys
 
-confusion_sites_filename = "/Users/saureous/data/decoded_mismatch-2.txt"
+confusion_sites_filename = "/Users/saureous/data/decoded_mismatch-short.txt"
 vcf_filename = "/Users/saureous/data/NA12878_S1.genome.vcf.gz"
 vcf_confident_filename = "/Users/saureous/data/NA12878_S1_confident.genome.vcf.gz"
 
@@ -18,7 +18,9 @@ class ConfusionValidator:
 
         self.confusion_data = list()
 
-        self.default_data_keys = ["genotype_label",
+        self.default_data_keys = ["region",
+                                  "position",
+                                  "genotype_label",
                                   "genotype_predict",
                                   "genotype_vcf",
                                   "reference_char",
@@ -91,7 +93,7 @@ class ConfusionValidator:
                     vcf_label_mismatch_confident, \
                     genotype_vcf_confident, \
                     vcf_reference_mismatch_confident, \
-                    reference_char_vcf_all, \
+                    reference_char_vcf_confident, \
                     record_text_confident,\
                     vcf_quality_confident = self.check_vcf_for_entry(region=region,
                                                                      position=position,
@@ -106,6 +108,8 @@ class ConfusionValidator:
 
                     # print(genotype_label,genotype_predict,is_insert,reference_char,frequencies)
 
+                    data[self.default_key_index["region"]] = region
+                    data[self.default_key_index["position"]] = position
                     data[self.default_key_index["genotype_vcf"]] = genotype_vcf_all
                     data[self.default_key_index["genotype_label"]] = genotype_label
                     data[self.default_key_index["genotype_predict"]] = genotype_predict
@@ -184,18 +188,20 @@ class ConfusionValidator:
         contig = "chr"+str(region)
         entries = vcf.fetch(contig=contig,start=position-1,stop=position)
         for record in entries:
-            n_entries += 1
             genotype_vcf = int(self.get_class_for_genotype(self.get_genotype(record)))
             # print(genotype_vcf)
-            reference_char_vcf = record.ref
-            record_text += str(record).strip() + '\t'
-            vcf_quality = record.qual if record.qual is not None else -1
+            if genotype_vcf != 1:   # ignore 0/0 genotypes, because why are they even in the VCF in the first place??
+                reference_char_vcf = record.ref
+                # print(region,position,record.ref)
+                record_text += str(record).strip() + '\t'
+                vcf_quality = record.qual if record.qual is not None else -1
+                n_entries += 1
 
         record_text = record_text.replace(',',';').replace('\t',"    ")
 
-        print(record_text)
+        # print(record_text)
 
-        if int(genotype_label) != genotype_vcf:
+        if int(genotype_label) != genotype_vcf and genotype_vcf != 1:
             vcf_label_mismatch = True
             # print("WARNING: incorrect labelling for %s, %s"%(contig,position))
             # print('\t',record)
@@ -209,8 +215,7 @@ class ConfusionValidator:
             # print('\t',record)
 
         # n_entries = len(list(entries))
-        print(n_entries)
-        if n_entries == 0 and genotype_vcf != 1:
+        if n_entries == 0:
             vcf_found = False
             # print("WARNING: No VCF entry found for %s, %s"%(contig,position))
         else:
