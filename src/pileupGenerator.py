@@ -439,7 +439,6 @@ if __name__ == '__main__':
                             threads = FLAGS.max_threads)
 
     # else:
-    
     # generatePileupBasedonVCF(vcf_region=FLAGS.vcf_region,
     #                          vcf_subregion=subregion,
     #                          bamFile=FLAGS.bam,
