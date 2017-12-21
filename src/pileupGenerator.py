@@ -390,13 +390,13 @@ if __name__ == '__main__':
     parser.add_argument(
         "--map_quality_cutoff",
         type=int,
-        default=30,
+        default=0,
         help="Phred scaled threshold for mapping quality."
     )
     parser.add_argument(
         "--vcf_quality_cutoff",
         type=int,
-        default=20,
+        default=10,
         help="Phred scaled threshold for variant call quality."
     )
     parser.add_argument(
