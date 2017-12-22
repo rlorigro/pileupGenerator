@@ -41,7 +41,7 @@ def getGTField(rec):
     return str(rec).rstrip().split('\t')[-1].split(':')[0].replace('/', '|').replace('\\', '|').split('|')
 
 
-def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
+def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff):
     vcf_in = VariantFile(vcfFile)
     # dictionaryKeys = ["genotypeClass","InsertLength","isDelete","isMismatch","uncorrectedGenotypeClass"]
 
@@ -50,7 +50,7 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff=60):
         genotypeClass = getClassForGenotype(gtField)
         uncorrectedGenotypeClass = None
 
-        if genotypeClass != 1 and rec.qual is not None and rec.qual > qualityCutoff:
+        if genotypeClass != 1 and rec.qual is not None and rec.qual >= qualityCutoff:
             alleles = rec.alleles
 
             insertLength = None
@@ -179,7 +179,7 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     files = list()
     cnt = 0
     start_timer = timer()
-    populateRecordDictionary(vcf_region, vcfFile)
+    populateRecordDictionary(vcf_region, vcfFile, vcf_quality_cutoff)
 
     if vcf_subregion[0] == ':':
         vcf_subregion_filename = '_' + vcf_subregion[1:]
@@ -396,7 +396,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--vcf_quality_cutoff",
         type=int,
-        default=10,
+        default=0,
         help="Phred scaled threshold for variant call quality."
     )
     parser.add_argument(
