@@ -17,7 +17,7 @@ bits. It creates a large binary sparse matrix too.
 
 allVariantRecord = {}
 # subregion = ':662800-663000'
-# subregion = ':725000-725300'
+# subregion = ':9684214-9684290'
 # subregion = ':1-200000'
 # subregion = ':180310000-180340000'
 subregion = ''
@@ -179,7 +179,7 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     files = list()
     cnt = 0
     start_timer = timer()
-    populateRecordDictionary(vcf_region, vcfFile)
+    populateRecordDictionary(vcf_region, vcfFile, vcf_quality_cutoff)
 
     if vcf_subregion[0] == ':':
         vcf_subregion_filename = '_' + vcf_subregion[1:]

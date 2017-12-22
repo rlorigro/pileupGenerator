@@ -11,7 +11,7 @@ vcf_confident_filename = "/Users/saureous/data/NA12878_S1_confident.genome.vcf.g
 
 
 class ConfusionValidator:
-    def __init__(self,vcf_all_filename,vcf_confident_filename,confusion_sites_filename):
+    def __init__(self,vcf_all_filename, vcf_confident_filename, confusion_sites_filename):
         self.vcf_all = VariantFile(vcf_all_filename)
         self.vcf_confident = VariantFile(vcf_confident_filename)
         self.confusion_sites_filename = confusion_sites_filename
@@ -50,7 +50,7 @@ class ConfusionValidator:
         self.insert_char = '_'
 
 
-    def collect_data(self,cutoff=None):
+    def collect_data(self,cutoff=sys.maxsize):
         '''
         Open the confusion data file and store all entries as a 3d dict.
 
@@ -147,6 +147,9 @@ class ConfusionValidator:
 
                 if l%1000 == 0:
                     sys.stderr.write("Completed %d lines\n"%l)
+
+                if l == cutoff:
+                    break
 
 
     def add_data(self, region, position, key, value):
@@ -265,5 +268,5 @@ validator = ConfusionValidator(vcf_all_filename=vcf_filename,
                                vcf_confident_filename=vcf_confident_filename,
                                confusion_sites_filename=confusion_sites_filename)
 
-validator.collect_data()
-validator.save_data("/Users/saureous/data/confusion/confusion_data.csv",cutoff=5000)
+validator.collect_data(cutoff=5000)
+validator.save_data("/Users/saureous/data/confusion/confusion_data.csv")

@@ -38,6 +38,8 @@ class Pileup:
         self.coverageThreshold = coverageThreshold
         # self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
 
+        print(self.insertLengths)
+
         # pysam fetch reads
         self.localReads = sam.fetch("chr"+self.chromosome, start=self.queryStart, end=self.queryEnd)
 
@@ -365,6 +367,7 @@ class Pileup:
         :param n:
         :return:
         '''
+
         if c in self.insertLengths:                         # if the position is a variant site
             l = self.insertLengths[c]  # length of insert
             if l >= n:                                      # correctly modify the label to fit the insert
