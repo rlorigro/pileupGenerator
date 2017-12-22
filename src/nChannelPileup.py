@@ -468,7 +468,7 @@ class Pileup:
                         pileupArray[j][image_iterator] = insert[j] if j < len(insert) else self.SNPtoRGB[self.noneChar]+self.noneAlpha
 
                     image_iterator += 1
-                    self.refAnchors.append(i)
+                    self.refAnchors.append(i-1)
                     if image_iterator >= self.windowCutoff:
                         break
 
