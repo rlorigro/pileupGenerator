@@ -390,7 +390,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--map_quality_cutoff",
         type=int,
-        default=0,
+        default=10,
         help="Phred scaled threshold for mapping quality."
     )
     parser.add_argument(
