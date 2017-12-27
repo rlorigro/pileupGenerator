@@ -18,9 +18,9 @@ bits. It creates a large binary sparse matrix too.
 allVariantRecord = {}
 # subregion = ':1547900-1547990'
 # subregion = ':9684214-9684290'
-subregion = ':1-200000'
+# subregion = ':1-200000'
 # subregion = ':180310000-180340000'
-# subregion = ''
+subregion = ''
 cutoffOutput = False
 cutoff = 350
 
@@ -429,34 +429,34 @@ if __name__ == '__main__':
 
     # if FLAGS.parallel == True:
 
-    # parallel_pileup_generator(vcf_region=FLAGS.vcf_region,
-    #                         bamFile = FLAGS.bam,
-    #                         refFile = FLAGS.ref,
-    #                         vcfFile = FLAGS.vcf,
-    #                         vcfFileConfident = FLAGS.vcf_confident,
-    #                         output_dir = FLAGS.output_dir,
-    #                         window_size = FLAGS.window_size,
-    #                         window_cutoff = FLAGS.window_cutoff,
-    #                         coverage_cutoff = FLAGS.coverage_cutoff,
-    #                         map_quality_cutoff = FLAGS.map_quality_cutoff,
-    #                         vcf_quality_cutoff = FLAGS.vcf_quality_cutoff,
-    #                         coverage_threshold = FLAGS.coverage_threshold,
-    #                         threads = FLAGS.max_threads)
+    parallel_pileup_generator(vcf_region=FLAGS.vcf_region,
+                            bamFile = FLAGS.bam,
+                            refFile = FLAGS.ref,
+                            vcfFile = FLAGS.vcf,
+                            vcfFileConfident = FLAGS.vcf_confident,
+                            output_dir = FLAGS.output_dir,
+                            window_size = FLAGS.window_size,
+                            window_cutoff = FLAGS.window_cutoff,
+                            coverage_cutoff = FLAGS.coverage_cutoff,
+                            map_quality_cutoff = FLAGS.map_quality_cutoff,
+                            vcf_quality_cutoff = FLAGS.vcf_quality_cutoff,
+                            coverage_threshold = FLAGS.coverage_threshold,
+                            threads = FLAGS.max_threads)
 
     # else:
-    generatePileupBasedonVCF(vcf_region=FLAGS.vcf_region,
-                             vcf_subregion=subregion,
-                             bamFile=FLAGS.bam,
-                             refFile=FLAGS.ref,
-                             vcfFile=FLAGS.vcf,
-                             vcfFileConfident=FLAGS.vcf_confident,
-                             output_dir=FLAGS.output_dir,
-                             window_size=FLAGS.window_size,
-                             window_cutoff=FLAGS.window_cutoff,
-                             coverage_cutoff=FLAGS.coverage_cutoff,
-                             map_quality_cutoff=FLAGS.map_quality_cutoff,
-                             vcf_quality_cutoff=FLAGS.vcf_quality_cutoff,
-                             coverage_threshold=FLAGS.coverage_threshold)
+    # generatePileupBasedonVCF(vcf_region=FLAGS.vcf_region,
+    #                          vcf_subregion=subregion,
+    #                          bamFile=FLAGS.bam,
+    #                          refFile=FLAGS.ref,
+    #                          vcfFile=FLAGS.vcf,
+    #                          vcfFileConfident=FLAGS.vcf_confident,
+    #                          output_dir=FLAGS.output_dir,
+    #                          window_size=FLAGS.window_size,
+    #                          window_cutoff=FLAGS.window_cutoff,
+    #                          coverage_cutoff=FLAGS.coverage_cutoff,
+    #                          map_quality_cutoff=FLAGS.map_quality_cutoff,
+    #                          vcf_quality_cutoff=FLAGS.vcf_quality_cutoff,
+    #                          coverage_threshold=FLAGS.coverage_threshold)
 
 
 # example usage:
