@@ -16,11 +16,11 @@ bits. It creates a large binary sparse matrix too.
 """
 
 allVariantRecord = {}
-# subregion = ':662800-663000'
+# subregion = ':1547900-1547990'
 # subregion = ':9684214-9684290'
-# subregion = ':1-200000'
+subregion = ':1-200000'
 # subregion = ':180310000-180340000'
-subregion = ''
+# subregion = ''
 cutoffOutput = False
 cutoff = 350
 
@@ -49,6 +49,7 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff):
         gtField = getGTField(rec)   # genotype according to the vcf
         genotypeClass = getClassForGenotype(gtField)
         uncorrectedGenotypeClass = None
+        mismatchGenotypeClass = None
 
         if genotypeClass != 1 and rec.qual is not None and rec.qual >= qualityCutoff:
             alleles = rec.alleles
@@ -99,6 +100,7 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff):
             if rec.start in allVariantRecord:
                 if allVariantRecord[rec.start][3] == True:  # overwrite only if preexisting entry is True
                     isMismatch = True
+                    mismatchGenotypeClass = allVariantRecord[rec.start][0]          # use the preexisting genotype corresponding to the mismatch
                 if allVariantRecord[rec.start][2] == True:
                     isDelete = True
 
@@ -118,6 +120,9 @@ def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff):
             if not isMismatch and (insertLength is not None or deleteLength is not None):
                 uncorrectedGenotypeClass = genotypeClass
                 genotypeClass = 1
+            elif mismatchGenotypeClass is not None and (insertLength is not None or deleteLength is not None):
+                uncorrectedGenotypeClass = genotypeClass
+                genotypeClass = mismatchGenotypeClass       # if there's a mismatch at the anchor of an indel, use its genotype class
             else:
                 uncorrectedGenotypeClass = genotypeClass
 
@@ -424,34 +429,34 @@ if __name__ == '__main__':
 
     # if FLAGS.parallel == True:
 
-    parallel_pileup_generator(vcf_region=FLAGS.vcf_region,
-                            bamFile = FLAGS.bam,
-                            refFile = FLAGS.ref,
-                            vcfFile = FLAGS.vcf,
-                            vcfFileConfident = FLAGS.vcf_confident,
-                            output_dir = FLAGS.output_dir,
-                            window_size = FLAGS.window_size,
-                            window_cutoff = FLAGS.window_cutoff,
-                            coverage_cutoff = FLAGS.coverage_cutoff,
-                            map_quality_cutoff = FLAGS.map_quality_cutoff,
-                            vcf_quality_cutoff = FLAGS.vcf_quality_cutoff,
-                            coverage_threshold = FLAGS.coverage_threshold,
-                            threads = FLAGS.max_threads)
+    # parallel_pileup_generator(vcf_region=FLAGS.vcf_region,
+    #                         bamFile = FLAGS.bam,
+    #                         refFile = FLAGS.ref,
+    #                         vcfFile = FLAGS.vcf,
+    #                         vcfFileConfident = FLAGS.vcf_confident,
+    #                         output_dir = FLAGS.output_dir,
+    #                         window_size = FLAGS.window_size,
+    #                         window_cutoff = FLAGS.window_cutoff,
+    #                         coverage_cutoff = FLAGS.coverage_cutoff,
+    #                         map_quality_cutoff = FLAGS.map_quality_cutoff,
+    #                         vcf_quality_cutoff = FLAGS.vcf_quality_cutoff,
+    #                         coverage_threshold = FLAGS.coverage_threshold,
+    #                         threads = FLAGS.max_threads)
 
     # else:
-    # generatePileupBasedonVCF(vcf_region=FLAGS.vcf_region,
-    #                          vcf_subregion=subregion,
-    #                          bamFile=FLAGS.bam,
-    #                          refFile=FLAGS.ref,
-    #                          vcfFile=FLAGS.vcf,
-    #                          vcfFileConfident=FLAGS.vcf_confident,
-    #                          output_dir=FLAGS.output_dir,
-    #                          window_size=FLAGS.window_size,
-    #                          window_cutoff=FLAGS.window_cutoff,
-    #                          coverage_cutoff=FLAGS.coverage_cutoff,
-    #                          map_quality_cutoff=FLAGS.map_quality_cutoff,
-    #                          vcf_quality_cutoff=FLAGS.vcf_quality_cutoff,
-    #                          coverage_threshold=FLAGS.coverage_threshold)
+    generatePileupBasedonVCF(vcf_region=FLAGS.vcf_region,
+                             vcf_subregion=subregion,
+                             bamFile=FLAGS.bam,
+                             refFile=FLAGS.ref,
+                             vcfFile=FLAGS.vcf,
+                             vcfFileConfident=FLAGS.vcf_confident,
+                             output_dir=FLAGS.output_dir,
+                             window_size=FLAGS.window_size,
+                             window_cutoff=FLAGS.window_cutoff,
+                             coverage_cutoff=FLAGS.coverage_cutoff,
+                             map_quality_cutoff=FLAGS.map_quality_cutoff,
+                             vcf_quality_cutoff=FLAGS.vcf_quality_cutoff,
+                             coverage_threshold=FLAGS.coverage_threshold)
 
 
 # example usage:

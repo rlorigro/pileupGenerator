@@ -38,7 +38,8 @@ class Pileup:
         self.coverageThreshold = coverageThreshold
         # self.smry_ref_pos_file_writer = smry_ref_pos_file_writer
 
-        print(self.insertLengths)
+        # print(self.insertLengths)
+        # print(mismatches)
 
         # pysam fetch reads
         self.localReads = sam.fetch("chr"+self.chromosome, start=self.queryStart, end=self.queryEnd)

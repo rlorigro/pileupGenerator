@@ -276,4 +276,5 @@ if __name__ == '__main__':
 
 
 #example usage:
-# python3 MultiDecoder.py --input_file /Users/saureous/data/test
+# python3 src/MultiDecoder.py --output_dir /Users/saureous/data/test/ --input_file /Users/saureous/data/test/summary_1_1547900-1547990.csv  >/Users/saureous/data/test/decode.txt
+
