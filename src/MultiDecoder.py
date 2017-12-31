@@ -171,7 +171,7 @@ class Decoder:
         print(png_file_name)
         pileupText = self.decodeRGB(output_directory+png_file_name)
         for r, row in enumerate(pileupText):
-            print(label[r], row)
+            print(row)
         # ----------------------------------------
 
 

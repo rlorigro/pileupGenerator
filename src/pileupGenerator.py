@@ -8,6 +8,7 @@ import sys
 import os
 import csv
 import nChannelPileup as SamPileupBMP
+from vcf_handler import *
 """
 This program takes an alignment file (bam) and a reference file
 to create a sparse bitmap representation of the pileup. It uses
@@ -18,12 +19,9 @@ bits. It creates a large binary sparse matrix too.
 allVariantRecord = {}
 # subregion = ':1547900-1547990'
 # subregion = ':9684214-9684290'
+# subregion = ':63996-63997'
 # subregion = ':1-200000'
-# subregion = ':180310000-180340000'
 subregion = ''
-cutoffOutput = False
-cutoff = 350
-
 
 def getClassForGenotype(gtField):
     if gtField[0] == '.':
@@ -37,154 +35,62 @@ def getClassForGenotype(gtField):
         return 2    # heterozygous (single or double alt)
 
 
-def getGTField(rec):
-    return str(rec).rstrip().split('\t')[-1].split(':')[0].replace('/', '|').replace('\\', '|').split('|')
+# def getGTField(rec):
+#     return str(rec).rstrip().split('\t')[-1].split(':')[0].replace('/', '|').replace('\\', '|').split('|')
 
 
-def populateRecordDictionary(vcf_region, vcfFile, qualityCutoff):
-    vcf_in = VariantFile(vcfFile)
-    # dictionaryKeys = ["genotypeClass","InsertLength","isDelete","isMismatch","uncorrectedGenotypeClass"]
+class RecordGetter:
+    def __init__(self,contig,subregion,vcf_handler):
+        '''
+        Take a vcf handler object and retrieve one entry at a time from the start to the end, ensuring all entries
+        are visited if multiple exist at a single position. If none remain, None is returned
+        :param start:
+        :param stop:
+        :param vcf_handler:
+        '''
+        self.contig = str(contig)
+        self.subregion = subregion
+        self.parser = vcf_handler
+        self.start = None
+        self.stop = None
+        self.current_position = None
+        self.current_records = None
+        self.records = None
+        self.record_positions = None
 
-    for rec in vcf_in.fetch(region="chr"+vcf_region+subregion):
-        gtField = getGTField(rec)   # genotype according to the vcf
-        genotypeClass = getClassForGenotype(gtField)
-        uncorrectedGenotypeClass = None
-        mismatchGenotypeClass = None
+        if not self.contig.startswith("chr"):
+            self.contig = "chr" + self.contig
 
-        if genotypeClass != 1 and rec.qual is not None and rec.qual >= qualityCutoff:
-            alleles = rec.alleles
+        self.initialize_records()
 
-            insertLength = None
-            deleteLength = None
-            isMismatch = False
-            isDelete = False
+    def initialize_records(self):
+        self.parser.populate_dictionary(contig=self.contig, site=self.subregion)
+        self.records = self.parser.get_variant_dictionary()
 
-            altAlleles = [alleles[int(gt)] for gt in gtField if gt!='0']
+    def get_next(self):
+        if self.current_position is None:                                       # if positions are uninitialized
+            all_positions = sorted(list(self.records.keys()))
+            self.record_positions = iter(all_positions)                         # initialize iterator for record positions
+            self.current_position = next(self.record_positions)
+            self.current_records = self.records[self.current_position]
+            self.start = all_positions[0]
+            self.stop = all_positions[-1]
 
-            altAllelesByLength = sorted(altAlleles, key=lambda x: len(x), reverse=True)
-
-            longestLength = len(altAllelesByLength[0])
-            shortestLength = len(altAllelesByLength[-1])
-            refLength = len(rec.ref)
-
-            if '0' not in gtField:                                      # double alternate
-                if genotypeClass == 2:                                  # heterozygous, must consider both alt lengths
-                    if longestLength == shortestLength:
-                        if longestLength > refLength:                   # insert
-                            insertLength = longestLength - refLength
-                        elif longestLength < refLength:
-                            deleteLength = refLength - longestLength    # delete
-                    else:
-                        if longestLength > refLength:                   # insert
-                            insertLength = longestLength - refLength
-                        elif longestLength < refLength:
-                            deleteLength = refLength - longestLength    # delete
-
-                        if shortestLength > refLength:                  # also insert
-                            insertLength = shortestLength - refLength
-                        elif shortestLength < refLength:                # also delete
-                            deleteLength = refLength - shortestLength
-
-                else:                                                   # homozygous, only one alt
-                    if longestLength > refLength:                       # insert
-                        insertLength = longestLength - refLength
-                    else:
-                        deleteLength = refLength - longestLength
-
-            else:                       # single alt, check length of longest allele to determine if ins or del
-                if longestLength > refLength:
-                    insertLength = longestLength - refLength
-                elif longestLength < refLength:
-                    deleteLength = refLength - longestLength
-
-            if rec.start in allVariantRecord:
-                if allVariantRecord[rec.start][3] == True:  # overwrite only if preexisting entry is True
-                    isMismatch = True
-                    mismatchGenotypeClass = allVariantRecord[rec.start][0]          # use the preexisting genotype corresponding to the mismatch
-                if allVariantRecord[rec.start][2] == True:
-                    isDelete = True
-
-            if deleteLength is not None:
-                offset = refLength - deleteLength
-                for i in range(offset,offset+deleteLength):         # starting after the reference sequence ends, label as delete
-                    if rec.start+i in allVariantRecord:             # if there is a preexisting record, only overwrite isDelete
-                        record = allVariantRecord[rec.start+i]
-                        record[2] = True
-                        allVariantRecord[rec.start+i] = record
-                    else:                                       # if no preexisting record, write new record
-                        allVariantRecord[rec.start+i] = [genotypeClass, 0, True, False, genotypeClass]
-
-            if longestLength == refLength or shortestLength == refLength:   # SNP (mismatch) is here
-                isMismatch = True
-
-            if not isMismatch and (insertLength is not None or deleteLength is not None):
-                uncorrectedGenotypeClass = genotypeClass
-                genotypeClass = 1
-            elif mismatchGenotypeClass is not None and (insertLength is not None or deleteLength is not None):
-                uncorrectedGenotypeClass = genotypeClass
-                genotypeClass = mismatchGenotypeClass       # if there's a mismatch at the anchor of an indel, use its genotype class
-            else:
-                uncorrectedGenotypeClass = genotypeClass
-
-            # print(rec.start,rec.pos,isDelete,isMismatch)
-
-            allVariantRecord[rec.start] = [genotypeClass, insertLength, isDelete, isMismatch, uncorrectedGenotypeClass]    # del will never be True at the anchor position
-
-
-def getLabel(start, end):
-    labelStr = ''              # draft of the labelling string, assuming no inserts
-    insertLengths = dict()     # stores length of longest variant for labelling of inserts during pileup generation
-    deletes = set()
-    deleteGenotypes = dict()
-    insertGenotypes = dict()
-    mismatches = set()
-
-    for j,i in enumerate(range(start, end)):
-        if i in allVariantRecord.keys():
-            gt = str(allVariantRecord[i][0])
-            uncorrectedGenotypeClass = str(allVariantRecord[i][4])
-            labelStr += gt
-
-            if allVariantRecord[i][1] is not None:
-                insertLengths[j] = int(allVariantRecord[i][1])
-                insertGenotypes[j] = uncorrectedGenotypeClass
-            if allVariantRecord[i][2] == True:
-                deletes.add(j)
-                deleteGenotypes[j] = uncorrectedGenotypeClass
-            if allVariantRecord[i][3] == True:
-                mismatches.add(j)
-
+        if self.current_position == self.stop and len(self.current_records) == 0:   # if all records at last position have been visited
+            return None
         else:
-            labelStr += str(1)  # hom
-    return labelStr, insertLengths, insertGenotypes, deletes, deleteGenotypes, mismatches
-
-
-# def removeAnchorLabels(refStart,refPositions,label,mismatches,inserts,deletes):
-#     print('M',mismatches)
-#     print('I',deletes)
-#     print('D',inserts)
-#     print(label)
-#
-#     label = list(label)
-#
-#     for p,position in enumerate(refPositions):
-#         # position-=1
-#         # print(absolutePosition)
-#         if position not in mismatches and (position in inserts or position in deletes):
-#             print("TRUE",position)
-#             label[position] = '1'
-#
-#     print(''.join(label))
-#     print()
-#     return ''.join(label)
+            if len(self.current_records) == 0:                                  # if all records at any given position have been visited
+                self.current_position = next(self.record_positions)             # find next position and corresponding records
+                self.current_records = self.records[self.current_position]
+            return self.current_records.pop()                                   # return last record at the position and remove from list
 
 
 def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff,
-                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, coverage_threshold, vcfFileConfident=None):
+                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, coverage_threshold):
     files = list()
     cnt = 0
     start_timer = timer()
-    populateRecordDictionary(vcf_region, vcfFile, vcf_quality_cutoff)
+    # populateRecordDictionary(vcf_region, vcfFile, vcf_quality_cutoff)
 
     if vcf_subregion[0] == ':':
         vcf_subregion_filename = '_' + vcf_subregion[1:]
@@ -220,53 +126,24 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     prev_start = None
     prev_end = None
 
-    if vcfFileConfident is not None:
-        variant_sites = VariantFile(vcfFileConfident).fetch(region="chr"+vcf_region+vcf_subregion)
-    else:
-        variant_sites = VariantFile(vcfFile).fetch(region="chr"+vcf_region+vcf_subregion)
+    vcf_handler = VCFFileProcessor(vcfFile)
+    record_getter = RecordGetter(contig=vcf_region,subregion=vcf_subregion,vcf_handler=vcf_handler)
 
-    for rec in variant_sites:
-        if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
-            start = rec.pos - window_size - 1
-            end = rec.pos + window_size
+    rec = record_getter.get_next()
+    while rec is not None:
+        if rec.qual is not None and rec.qual > vcf_quality_cutoff and rec.type != "Hom":
+            # print(rec.type)
+            filename = output_dir + vcf_region + "_" + str(rec.pos)
 
-            if prev_start is not None and prev_end is not None and rec.pos < prev_end - 10:
-                continue
-            else:
-                prev_start = start
-                prev_end = end
-
-            labelString, insertLengths, insertGenotypes, deleteLengths, deleteGenotypes, mismatches = getLabel(start, end)
-
-            filename = output_dir + rec.chrom + "_" + str(rec.pos)
-
-            outputLabelString,refStartPosition,refAnchorPositions,arrayShape = p.generatePileup(chromosome=vcf_region,
-                                                                                     position=rec.pos - 1,
-                                                                                     flankLength=window_size,
-                                                                                     coverageCutoff=coverage_cutoff,
-                                                                                     windowCutoff=window_cutoff,
-                                                                                     mapQualityCutoff=map_quality_cutoff,
-                                                                                     outputFilename=filename,
-                                                                                     label=labelString,
-                                                                                     insertLengths=insertLengths,
-                                                                                     insertGenotypes=insertGenotypes,
-                                                                                     deleteLengths=deleteLengths,
-                                                                                     deleteGenotypes=deleteGenotypes,
-                                                                                     coverageThreshold=coverage_threshold,
-                                                                                     mismatches=mismatches
-                                                                                     )
-
-            # print(filename)
-            # print(labelString)
-            # print(outputLabelString)
-
-            # outputLabelString = removeAnchorLabels(refStart=rec.pos,
-            #                                        label=outputLabelString,
-            #                                        refPositions=refAnchorPositions,
-            #                                        mismatches=mismatches,
-            #                                        inserts=insertLengths,
-            #                                        deletes=deleteLengths)
-
+            refStartPosition,refAnchorPositions,arrayShape = p.generatePileup(chromosome=vcf_region,
+                                                                              position=rec.pos - 1,
+                                                                              flankLength=window_size,
+                                                                              coverageCutoff=coverage_cutoff,
+                                                                              windowCutoff=window_cutoff,
+                                                                              mapQualityCutoff=map_quality_cutoff,
+                                                                              outputFilename=filename,
+                                                                              coverageThreshold=coverage_threshold
+                                                                              )
 
             cnt += 1
             if cnt % 1000 == 0:
@@ -274,13 +151,12 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
                 print(str(cnt) + " Records done", file=sys.stderr)
                 print("TIME elapsed " + str(end_timer - start_timer), file=sys.stderr)
 
-            smry.write(os.path.abspath(filename) + ".png," + str(outputLabelString) + ',' + ','.join(map(str,arrayShape))+'\n')
+            smry.write(os.path.abspath(filename) + ".png," + str(rec.type) + ',' + ','.join(map(str,arrayShape))+'\n')
             row = [os.path.abspath(filename) + ".png,", refStartPosition]+refAnchorPositions
             smry_ref_pos_file_writer.writerow(row)
 
-            if cutoffOutput:
-                if cnt > cutoff:
-                    break
+        rec = record_getter.get_next()  # return the next record until None is returned
+        # print(rec)
 
     for file in files:
         file.close()
@@ -299,11 +175,15 @@ def chunkIt(seq, num):
 
 
 def parallel_pileup_generator(vcf_region, bamFile, refFile, vcfFile, output_dir, window_size, window_cutoff,
-                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, threads, coverage_threshold,vcfFileConfident=None):
+                             coverage_cutoff, map_quality_cutoff, vcf_quality_cutoff, threads, coverage_threshold):
     all_positions = []
 
-    for rec in VariantFile(vcfFile).fetch(region="chr"+vcf_region):
-        if rec.qual is not None and rec.qual > vcf_quality_cutoff and getClassForGenotype(getGTField(rec)) != 1:
+    vcf_handler = VCFFileProcessor(vcfFile)
+    record_getter = RecordGetter(contig=vcf_region,subregion='',vcf_handler=vcf_handler)
+
+    rec = record_getter.get_next()
+    while rec is not None:
+        if rec.qual is not None and rec.qual > vcf_quality_cutoff and rec.type != "Hom":
             all_positions.append(rec.pos)
 
     all_positions = chunkIt(all_positions, threads)
@@ -316,8 +196,9 @@ def parallel_pileup_generator(vcf_region, bamFile, refFile, vcfFile, output_dir,
         vcf_subregion = "-"+str(starts[i])+"-"+str(ends[i])
         p = Process(target=generatePileupBasedonVCF, args=(vcf_region, vcf_subregion, bamFile, refFile, vcfFile,
                                                            output_dir, window_size, window_cutoff, coverage_cutoff,
-                                                           map_quality_cutoff, vcf_quality_cutoff,coverage_threshold,vcfFileConfident))
+                                                           map_quality_cutoff, vcf_quality_cutoff,coverage_threshold))
         p.start()
+
 
 if __name__ == '__main__':
     '''
@@ -342,13 +223,6 @@ if __name__ == '__main__':
         type=str,
         required=True,
         help="VCF file containing SNPs and SVs."
-    )
-    parser.add_argument(
-        "--vcf_confident",
-        type=str,
-        required=False,
-        help="Confident VCF file containing SNPs and SVs. If provided, pileups will only be generated at sites from this \
-             file. Non-confident sites may be found and labelled within the window of confident sites, however."
     )
     parser.add_argument(
         "--region",
@@ -433,7 +307,6 @@ if __name__ == '__main__':
                             bamFile = FLAGS.bam,
                             refFile = FLAGS.ref,
                             vcfFile = FLAGS.vcf,
-                            vcfFileConfident = FLAGS.vcf_confident,
                             output_dir = FLAGS.output_dir,
                             window_size = FLAGS.window_size,
                             window_cutoff = FLAGS.window_cutoff,
@@ -449,7 +322,6 @@ if __name__ == '__main__':
     #                          bamFile=FLAGS.bam,
     #                          refFile=FLAGS.ref,
     #                          vcfFile=FLAGS.vcf,
-    #                          vcfFileConfident=FLAGS.vcf_confident,
     #                          output_dir=FLAGS.output_dir,
     #                          window_size=FLAGS.window_size,
     #                          window_cutoff=FLAGS.window_cutoff,
