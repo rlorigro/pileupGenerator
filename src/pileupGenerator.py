@@ -122,7 +122,7 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
     log.write("Map quality cutoff: \t%s\n" % map_quality_cutoff)
     log.write("Coverage threshold: \t%s\n" % coverage_threshold)
 
-    p = SamPileupBMP.PileUpGenerator(bamFile, refFile)  #, smry_ref_pos_file_writer)
+    p = SamPileupBMP.PileupGenerator(bamFile, refFile)  #, smry_ref_pos_file_writer)
     prev_start = None
     prev_end = None
 
@@ -135,15 +135,15 @@ def generatePileupBasedonVCF(vcf_region, vcf_subregion, bamFile, refFile, vcfFil
             # print(rec.type)
             filename = output_dir + vcf_region + "_" + str(rec.pos)
 
-            refStartPosition,refAnchorPositions,arrayShape = p.generatePileup(chromosome=vcf_region,
-                                                                              position=rec.pos - 1,
-                                                                              flankLength=window_size,
-                                                                              coverageCutoff=coverage_cutoff,
-                                                                              windowCutoff=window_cutoff,
-                                                                              mapQualityCutoff=map_quality_cutoff,
-                                                                              outputFilename=filename,
-                                                                              coverageThreshold=coverage_threshold
-                                                                              )
+            refStartPosition,refAnchorPositions,arrayShape = p.generate_pileup(chromosome=vcf_region,
+                                                                               position=rec.pos - 1,
+                                                                               flank_length=window_size,
+                                                                               coverage_cutoff=coverage_cutoff,
+                                                                               window_cutoff=window_cutoff,
+                                                                               map_quality_cutoff=map_quality_cutoff,
+                                                                               output_filename=filename,
+                                                                               coverage_threshold=coverage_threshold
+                                                                               )
 
             cnt += 1
             if cnt % 1000 == 0:
