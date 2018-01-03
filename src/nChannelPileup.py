@@ -77,7 +77,7 @@ class Pileup:
         self.insert_alpha = [1]
         self.reference_alpha = [1]
 
-        self.inserts = dict()
+        self.insert_columns = dict()
         self.pileup_image = [[self.code_template[self.none_char]+self.none_alpha]*(self.window_cutoff) for j in range(self.coverage_cutoff)]  # mixing tuples (below) and lists... bad!
         self.cigar_legend = ['M', 'I', 'D', 'N', 'S', 'H', 'P', '=', 'X', 'B', '?']  # ?=NM
 
@@ -137,6 +137,31 @@ class Pileup:
             self.pack_row_mapping[r] = i
 
 
+    def get_match_encoding(self):
+        nt = self.read_sequence[self.read_index]            # find read nucleotide
+        ntRef = self.ref_sequence[self.ref_index_relative]  # find ref nucleotide
+
+        if nt != ntRef and nt != 'N':                       # if mismatch AND NOT A SEQUENCING ERROR
+            encoding = list(self.code_template['M'])        # - encode as a mismatch
+        else:                                               # else
+            encoding = list(self.empty_channel_vector)      # - encode as an empty template
+
+        nt_channel = self.channel_key[nt]
+        encoding[nt_channel] = 1.0                          # encode the nucleotide identity
+        return encoding
+
+
+    def get_delete_encoding(self):
+        encoding = list(self.code_template['D'])    # encode as delete
+        encoding[self.channel_key['M']] = 1.0       # set mismatch channel to 1
+        return encoding
+
+
+    def get_refskip_encoding(self):
+        encoding = list(self.code_template['N'])  # encode as N, which doesn't have its own channel
+        return encoding
+
+
     def add_pileup_entry(self, r, snp, quality):
         '''
         For a given read and SNP, add the corresponding encoding to the pileup array
@@ -144,48 +169,27 @@ class Pileup:
         :param snp:
         '''
 
-        # if self.packMap[r] == 0:
-        #     print(snp,self.relativeIndexRef,self.absolutePosition, self.variantPosition)
-
         if snp < 4 and snp != 1:
-            index = self.ref_index_relative
             encoding = None
             coverage = None
-            self.pileup_row_ends[self.pack_row_mapping[r]] = index  # find row mapping (for read packing)
+            self.pileup_row_ends[self.pack_row_mapping[r]] = self.ref_index_relative  # update last entry in pileupEnds
 
-            if snp == 0:                                            # ---- MATCH ---------------------------
-                nt = self.read_sequence[self.read_index]            # find read nucleotide
-                ntRef = self.ref_sequence[self.ref_index_relative]  # find ref nucleotide
-
-                # if self.packMap[r] == 0:
-                #     print(ntRef)
-
-                if nt != ntRef and nt != 'N':                       # if mismatch AND NOT A SEQUENCING ERROR
-                    encoding = list(self.code_template['M'])            # encode as a mismatch
-                else:                                               # else
-                    encoding = list(self.empty_channel_vector)          # encode as an empty template
-
-                nt_channel = self.channel_key[nt]
-
-                encoding[nt_channel] = 1.0                          # encode the nucleotide identity
-
+            if snp == 0:                                    # ----- MATCH --------
+                encoding = self.get_match_encoding()
                 coverage = 1
 
-            elif snp == 2:                                          # ----- DELETE -------------------------
-                encoding = list(self.code_template['D'])            # encode as delete
+            elif snp == 2:                                  # ----- DELETE -------
+                encoding = self.get_delete_encoding()
                 coverage = 1
 
-                encoding[self.channel_key['M']] = 1.0               # set mismatch channel to 1
-
-            elif snp == 3:                                          # ----- REFSKIP ------------------------
-                encoding = list(self.code_template['N'])            # encode as N, which doesn't have its own channel
+            elif snp == 3:                                  # ----- REFSKIP ------
+                encoding = self.get_refskip_encoding()
                 coverage = 0
 
-            self.coverage_per_column[index] += coverage
+            self.coverage_per_column[self.ref_index_relative] += coverage
 
             encoding = encoding+[quality]  # append the quality Alpha value and store as tuple
-
-            self.pileup_image[self.pack_row_mapping[r]][index] = encoding      # Finally add the code to the pileup
+            self.pileup_image[self.pack_row_mapping[r]][self.ref_index_relative] = encoding      # Finally add the code to the pileup
 
 
     def add_insert_entry(self, readCharacters, n, qualities, r):
@@ -198,19 +202,19 @@ class Pileup:
         :return:
         '''
         i = self.ref_index_relative
-        if i not in self.inserts:
-            self.inserts[i] = []    # insert entries are a list of n columns where n is the length of the longest insert
+        if i not in self.insert_columns:
+            self.insert_columns[i] = []    # insert entries are a list of n columns where n is the length of the longest insert
 
         for c, character in enumerate(readCharacters):
-            if c >= len(self.inserts[i]):   # no insert column exists yet
-                self.inserts[i] = self.inserts[i] + [[self.code_template['I']+self.insert_alpha]*(self.coverage_cutoff+1)]
+            if c >= len(self.insert_columns[i]):   # no insert column exists yet
+                self.insert_columns[i] = self.insert_columns[i]+[[self.code_template['I']+self.insert_alpha]*(self.coverage_cutoff+1)]
 
             encoding = list(self.code_template[character])
 
             encoding[self.channel_key['M']] = 1.0        # set mismatch channel to 1
             encoding[self.channel_key['I']] = 1.0        # set insert channel to 1
 
-            self.inserts[i][c][self.pack_row_mapping[r]+1] = encoding+[qualities[c]]    # store quality-appended vector
+            self.insert_columns[i][c][self.pack_row_mapping[r]+1] = encoding+[qualities[c]]    # store quality-appended vector
 
 
     def get_pileup_encoding(self, cigarCode, refCharacter, readCharacter):
@@ -244,8 +248,8 @@ class Pileup:
         :param map_quality:
         :return:
         '''
-        quality = min(base_quality, map_quality)       # calculate minimum of quality for base and read quality
-        quality = (1-(10 ** ((quality)/-10)))   # convert to probability and scale to 0-255 for pixel encoding
+        quality = min(base_quality, map_quality)        # calculate minimum of quality for base and read quality
+        quality = (1-(10 ** ((quality)/-10)))           # convert to probability and scale to 0-255 for pixel encoding
 
         return quality
 
@@ -269,19 +273,18 @@ class Pileup:
             # sys.stderr.write("WARNING: read contains no reference alignments: %s\n" % read.query_name)
             pass
         else:
-            self.ref_start_absolute = ref_positions[0]+1
+            self.ref_start_absolute = ref_positions[0] + 1
             self.cigar_tuples = read.cigartuples
 
             ref_positions = None  # dump
 
             self.read_sequence = read.query_alignment_sequence
-
-            self.ref_index = 0        # ???
-            self.read_index = 0       # index of the queried read sequence
-            self.ref_index_relative = 0   # index of the reference sequence to compare mismatches with
+            self.ref_index = 0              # absolute reference position that the read aligns to
+            self.read_index = 0             # index of the queried read sequence
+            self.ref_index_relative = 0     # index of the reference sequence to compare mismatches with
 
             if self.ref_start_absolute >= self.query_start:                         # if the read starts during the query region
-                self.ref_index_relative = self.ref_start_absolute-self.query_start    # add the difference to ref index
+                self.ref_index_relative = self.ref_start_absolute-self.query_start  # add the difference to ref index
 
             for c, entry in enumerate(self.cigar_tuples):
                 snp = entry[0]
@@ -353,7 +356,7 @@ class Pileup:
         :return:
         '''
 
-        for c in range(len(self.inserts[i])):
+        for c in range(len(self.insert_columns[i])):
             for r in range(self.coverage_cutoff+1):
                 prev_entry = self.pileup_image[r][i-1][:-1]   # exclude quality
 
@@ -365,7 +368,7 @@ class Pileup:
                 prev_entry = self.decode_map[index]
 
                 if prev_entry == self.none_char:    # if previous entry decodes to None character
-                    self.inserts[i][c][r] = self.code_template[self.none_char]+self.none_alpha  # this entry should be None
+                    self.insert_columns[i][c][r] = self.code_template[self.none_char]+self.none_alpha  # this entry should be None
 
 
     def save_pileup_array(self, filename):
@@ -388,21 +391,19 @@ class Pileup:
 
         # count insert columns that appear before variant column
         for i in range(0, self.flank_length):
-            if i in self.inserts:
-                self.n_inserts_before_variant_site += len(self.inserts[i])
-
-        # print(self.nInsertsBeforeVariant)
+            if i in self.insert_columns:
+                self.n_inserts_before_variant_site += len(self.insert_columns[i])
 
         image_iterator = -self.n_inserts_before_variant_site
         i = 0
         while image_iterator < self.window_cutoff:
-            if i in self.inserts:
-                insert_rows = self.inserts[i]
+            if i in self.insert_columns:
+                insert_rows = self.insert_columns[i]
                 self.clean_insert_columns(i)
 
                 for insert in insert_rows:
                     for j in range(self.coverage_cutoff):
-                        if image_iterator >= 0:
+                        if image_iterator >= 0:     # offset to ensure variant is centered
                             pileup_array[j][image_iterator] = insert[j] if j < len(insert) else self.code_template[self.none_char]+self.none_alpha
 
                     image_iterator += 1
@@ -414,7 +415,7 @@ class Pileup:
                 break
 
             for j in range(self.coverage_cutoff):
-                if image_iterator >= 0:
+                if image_iterator >= 0:             # offset to ensure variant is centered
                     if j < self.coverage_cutoff:
                         pileup_array[j][image_iterator] = self.pileup_image[j][i] if i < len(self.pileup_image[j]) else self.code_template[self.none_char]+self.none_alpha
                     else:
